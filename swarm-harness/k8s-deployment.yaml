@@ -1,0 +1,55 @@
+# k8s-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swarm-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: swarm-api
+  template:
+    metadata:
+      labels:
+        app: swarm-api
+    spec:
+      containers:
+      - name: api
+        image: your-registry/swarm-harness:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: redis-url
+        - name: DEEPSEEK_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: deepseek-key
+        - name: KIMI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: kimi-key
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: swarm-api-service
+spec:
+  selector:
+    app: swarm-api
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: LoadBalancer
