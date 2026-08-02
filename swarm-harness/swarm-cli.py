@@ -15,9 +15,9 @@ def submit(prompt: str):
         json={
             "prompt": prompt,
             "agents": [
-                {"role": "planner", "provider": "deepseek", "model": "deepseek-chat"},
+                {"role": "planner", "provider": "deepseek", "model": "deepseek-v4-flash-ultra-reasoning"},
                 {"role": "coder", "provider": "kimi", "model": "kimi-k3"},
-                {"role": "reviewer", "provider": "deepseek", "model": "deepseek-chat"},
+                {"role": "reviewer", "provider": "deepseek", "model": "deepseek-v4-flash-ultra-reasoning"},
                 {"role": "merger", "provider": "kimi", "model": "kimi-k3"}
             ],
             "token_budget": 40000,

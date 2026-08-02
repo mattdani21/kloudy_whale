@@ -12,5 +12,7 @@ class Config:
     DEFAULT_TOKEN_BUDGET: int = int(os.getenv("DEFAULT_TOKEN_BUDGET", "50000"))
     NOTIFICATION_WEBHOOK: str = os.getenv("NOTIFICATION_WEBHOOK", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    # Model used when a "kimi" agent runs without KIMI_API_KEY set
+    DEEPSEEK_FALLBACK_MODEL: str = os.getenv("DEEPSEEK_FALLBACK_MODEL", "deepseek-v4-flash-ultra-reasoning")
 
 CONFIG = Config()

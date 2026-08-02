@@ -1,9 +1,12 @@
 # app/llm_router.py
 import aiohttp
 import asyncio
+import logging
 from typing import List, Dict, Tuple
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 class LLMRouter:
     def __init__(self):
@@ -62,8 +65,17 @@ class LLMRouter:
 
     async def route(self, messages: List[Dict], provider: str, model: str, max_tokens: int = 4000) -> Tuple[str, int]:
         if provider == "deepseek":
+            if not CONFIG.DEEPSEEK_API_KEY:
+                raise ValueError("DEEPSEEK_API_KEY is not set")
             return await self.call_deepseek(messages, model, max_tokens)
         elif provider == "kimi":
+            if not CONFIG.KIMI_API_KEY:
+                fallback = CONFIG.DEEPSEEK_FALLBACK_MODEL
+                logger.warning(
+                    "KIMI_API_KEY not set — falling back to deepseek (%s) for provider='kimi' request",
+                    fallback,
+                )
+                return await self.call_deepseek(messages, fallback, max_tokens)
             return await self.call_kimi(messages, model, max_tokens)
         else:
             raise ValueError(f"Unknown provider: {provider}")

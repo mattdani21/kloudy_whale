@@ -102,8 +102,10 @@ At any point the plan or a step can request clarification. The build enters `wai
 
 | Provider | Endpoint | Default model |
 |---|---|---|
-| `deepseek` | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
+| `deepseek` | `https://api.deepseek.com/v1/chat/completions` | `deepseek-v4-flash-ultra-reasoning` |
 | `kimi` | `https://api.moonshot.cn/v1/chat/completions` | `kimi-k3` |
+
+> **Fallback:** if `KIMI_API_KEY` is not set, any `kimi` agent silently routes to DeepSeek using `DEEPSEEK_FALLBACK_MODEL` (a warning is logged per request). This means a DeepSeek-only deployment works out of the box with the default agent lineup — Kimi is used only when its key is configured.
 
 ### Build lifecycle (`BuildState`)
 
@@ -202,7 +204,8 @@ All configuration is environment-driven (`app/config.py`).
 | Variable | Default | Description |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | *(empty)* | API key for DeepSeek (`api.deepseek.com`) |
-| `KIMI_API_KEY` | *(empty)* | API key for Kimi/Moonshot (`api.moonshot.cn`) |
+| `KIMI_API_KEY` | *(empty)* | API key for Kimi/Moonshot (`api.moonshot.cn`). If unset, `kimi` agents automatically **fall back to DeepSeek** (`DEEPSEEK_FALLBACK_MODEL`) instead of failing |
+| `DEEPSEEK_FALLBACK_MODEL` | `deepseek-v4-flash-ultra-reasoning` | Model used when a `kimi` agent runs without `KIMI_API_KEY` |
 | `API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |
@@ -302,7 +305,7 @@ The server closes the socket when the build reaches a terminal state (and sends 
 
 ## CLI
 
-The interactive CLI (`swarm-cli.py`) is the fastest way to try the system end-to-end: it submits a default 4-agent build (planner/reviewer on DeepSeek, coder/merger on Kimi, 40k token budget), polls until done, **prompts you inline when a human gate fires**, and prints the final output.
+The interactive CLI (`swarm-cli.py`) is the fastest way to try the system end-to-end: it submits a default 4-agent build (planner/reviewer on DeepSeek, coder/merger on Kimi, 40k token budget — coder/merger fall back to DeepSeek automatically if no Kimi key is set), polls until done, **prompts you inline when a human gate fires**, and prints the final output.
 
 ```bash
 export SWARM_API_URL=http://localhost:8000   # default
