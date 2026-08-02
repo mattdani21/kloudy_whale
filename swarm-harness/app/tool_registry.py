@@ -1,6 +1,15 @@
 # app/tool_registry.py
+"""Tool registry with repo-backed tools.
+
+The swarm pipeline does not do live function-calling: agents emit structured
+file manifests, and the coordinator drives these tools. Tools stage file
+writes and commit them as ONE commit at the end of the build.
+"""
 import asyncio
-from typing import Callable, Dict
+from typing import Callable, Dict, List
+
+from app.github_client import GitHubError, GitHubRepoClient
+
 
 class ToolRegistry:
     def __init__(self):
@@ -19,27 +28,41 @@ class ToolRegistry:
         except Exception as e:
             return f"Tool error: {str(e)}"
 
-# ─── Default tools ───────────────────────────────────────────────────
 
-async def _tool_write_file(path: str, content: str) -> str:
-    # In real deploy, use S3 or volume
-    return f"Wrote {len(content)} chars to {path}"
-
-async def _tool_read_file(path: str) -> str:
-    return f"Contents of {path}: [placeholder]"
-
-async def _tool_execute_python(code: str) -> str:
-    # Use restricted exec or Docker
-    return f"Executed Python code: {code[:50]}..."
-
-async def _tool_web_search(query: str) -> str:
-    # Integrate with search API
-    return f"Search results for: {query}"
-
-def default_registry() -> ToolRegistry:
+def repo_registry(client: GitHubRepoClient) -> ToolRegistry:
+    """Real tools bound to a GitHub repo. Writes are staged and committed at build end."""
     registry = ToolRegistry()
-    registry.register("write_file", _tool_write_file)
-    registry.register("read_file", _tool_read_file)
-    registry.register("execute_python", _tool_execute_python)
-    registry.register("web_search", _tool_web_search)
+    staging: Dict[str, str] = {}
+
+    async def _read_file(path: str) -> str:
+        if path in staging:
+            return staging[path]
+        try:
+            return await client.read_file(path)
+        except GitHubError as e:
+            return f"Error reading {path}: {e}"
+
+    async def _list_files() -> str:
+        try:
+            files = await client.list_files()
+            return "\n".join(files) if files else "(empty repository)"
+        except GitHubError as e:
+            return f"Error listing files: {e}"
+
+    async def _write_file(path: str, content: str) -> str:
+        staging[path] = content
+        return f"Staged {len(content)} chars to {path} (committed at end of build)"
+
+    async def _commit(message: str) -> str:
+        if not staging:
+            return "No changes to commit"
+        result = await client.write_files(dict(staging), message)
+        staging.clear()
+        return f"Committed {len(result['files'])} files to {client.owner}/{client.repo}@{result['branch']} ({result['commit'][:10]})"
+
+    registry.register("read_file", _read_file)
+    registry.register("list_files", _list_files)
+    registry.register("write_file", _write_file)
+    registry.register("commit", _commit)
+    registry.staging = staging  # type: ignore[attr-defined]
     return registry

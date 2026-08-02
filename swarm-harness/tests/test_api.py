@@ -26,9 +26,11 @@ class FakeCoordinator:
         self.store = store
         self.submitted = []
 
-    async def submit(self, prompt, agents, token_budget=50000, strategy="swarm"):
+    async def submit(self, prompt, agents, token_budget=50000, strategy="swarm", repo=None):
         build = SwarmBuild(id="testbuild123", prompt=prompt, state=BuildState.QUEUED,
                            strategy=strategy, agents=agents, token_budget_total=token_budget)
+        if repo:
+            build.metadata["repo"] = {"owner": repo.owner, "name": repo.name, "token": repo.token, "branch": repo.branch}
         await self.store.save(build)
         self.submitted.append(build)
         return build.id
@@ -95,6 +97,30 @@ def test_create_build_with_slack_webhook(client, fakes):
     assert resp.status_code == 200
     build = store.builds["testbuild123"]
     assert build.metadata["slack_webhook"] == "https://hooks.slack.com/x"
+
+def test_create_build_with_repo(client, fakes):
+    store, _ = fakes
+    body = {**BUILD_BODY, "repo": {"owner": "acme", "name": "proj", "token": "github_pat_secret", "branch": "main"}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    assert resp.json()["repo"] == {"owner": "acme", "name": "proj", "branch": "main"}
+    build = store.builds["testbuild123"]
+    assert build.metadata["repo"]["token"] == "github_pat_secret"
+
+def test_build_summary_redacts_repo_token(client, fakes):
+    store, _ = fakes
+    build = SwarmBuild(id="b1", prompt="p", state=BuildState.COMPLETED)
+    build.metadata["repo"] = {"owner": "acme", "name": "proj", "token": "github_pat_secret", "branch": None}
+    build.metadata["files_written"] = ["a.py"]
+    build.metadata["commit_sha"] = "abc123"
+    store.builds["b1"] = build
+    resp = client.get("/v1/build/b1", headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["repo"] == {"owner": "acme", "name": "proj", "token": None, "branch": None} or "token" not in data["repo"]
+    assert "github_pat_secret" not in resp.text
+    assert data["files_written"] == ["a.py"]
+    assert data["commit_sha"] == "abc123"
 
 def test_get_build(client, fakes):
     store, _ = fakes

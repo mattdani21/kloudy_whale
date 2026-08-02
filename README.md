@@ -35,6 +35,7 @@ The rest of this README documents the implementation as it exists today and how 
 - [Key concepts](#key-concepts)
 - [Project layout](#project-layout)
 - [Quick start](#quick-start)
+- [Web UI](#web-ui)
 - [Configuration](#configuration)
 - [API reference](#api-reference)
 - [Live streaming (WebSocket)](#live-streaming-websocket)
@@ -73,8 +74,13 @@ A **planner** agent (typically DeepSeek) receives your prompt and returns a JSON
 ### Phase 2 — Parallel execution
 Pending steps are executed **concurrently** (`asyncio.gather`) by agents in the pool, each step routed to its configured provider/model with retry-on-transient-failure (exponential backoff). If **more than half** the swarm fails, the build fails fast. Token usage is tracked against the build's budget after every call.
 
+**Repo mode** (when a build targets a GitHub repo): coder/tester steps output a structured JSON *file manifest* (`{path, content}` objects) instead of prose. The coordinator collects every manifest and writes them to the repo as **one commit per build** via the GitHub Git Data API — full read/write access to the repo, no clone needed.
+
 ### Phase 3 — Cross-review
 A **reviewer** agent reviews every completed step's output and marks it approved or rejected. Any unapproved step is **retried once** (as long as the build has used less than 80% of its token budget).
+
+### Phase 3.5 — Repo write + verify (repo mode)
+The collected file manifests are committed to the target GitHub repo. Then a **verifier agent reads the repo back** — listing the actual files and comparing them against the original request — and reports **`DONE`** or a list of what still needs work. If work is missing and token budget remains, one extra coder round fixes the gaps and commits a follow-up.
 
 ### Phase 4 — Merge
 A **merger** ("tech lead") agent combines all step outputs with the original prompt into the final deliverable (`final_output`), and the build transitions to `completed`.
@@ -195,6 +201,20 @@ curl http://localhost:8000/v1/health
 # {"status":"ok","version":"1.0.0"}
 ```
 
+Then open **http://localhost:8000/** in a browser for the web UI.
+
+---
+
+## Web UI
+
+A lightweight single-page UI is served at the app root (`/`). No build step, no framework — plain HTML/JS.
+
+1. **GitHub target repo** — owner, repo name, a fine-grained **PAT** (Settings → Developer settings → Fine-grained tokens: *Contents: Read and write* on the target repo), optional branch (default branch if blank).
+2. **Build** — the prompt, the DeepKimi `API_KEY` for this deployment, and an optional token budget. The default 4-agent lineup (planner/reviewer DeepSeek, coder/merger Kimi — Kimi falls back to DeepSeek without a key) is used.
+3. **Status** — live progress over WebSocket: state badge, token usage, steps done, human-gate prompts (answered inline), and the final output with the commit hash + files written.
+
+Security notes: the PAT and API key are stored only in your browser's `localStorage` and in the build record in Redis (7-day TTL). The PAT is **never** returned by any API endpoint (redacted from summaries) and is never logged.
+
 ---
 
 ## Configuration
@@ -234,13 +254,15 @@ All routes except `GET /v1/health` require the header `X-API-Key: <API_KEY>`.
   ],
   "strategy": "swarm",
   "token_budget": 4000000,
-  "slack_webhook": "https://hooks.slack.com/services/..."
+  "slack_webhook": "https://hooks.slack.com/services/...",
+  "repo": {"owner": "mattdani21", "name": "my-project", "token": "github_pat_...", "branch": "main"}
 }
 ```
 
 - `agents` — **required**; each entry: `role` (`planner|coder|reviewer|tester|merger|tool`), `provider` (`deepseek|kimi`), `model`, plus optional `temperature`, `max_tokens`, `system_prompt`, `token_budget`.
 - `strategy` — `single` | `swarm` (default) | `debate`.
 - `slack_webhook` — optional; per-build Slack notifications.
+- `repo` — optional; `{owner, name, token, branch?}`. When set, the build writes its files to that GitHub repo (single commit) and verifies the result against it. The token is stored in the build record (7-day Redis TTL) and **never returned by any endpoint**.
 
 **Response:**
 
@@ -353,7 +375,7 @@ The whole point is a service that stays up: deploy once, keep it running, trigge
 The codebase is an early implementation of the vision above. Known gaps:
 
 - **In-process execution** — builds live and die with the API process; the worker only rescues builds still in `queued`. For hard durability across crashes, an out-of-process queue (e.g. Celery/Redis Streams) is the natural next step.
-- **Placeholder tools** — `tool_registry.py` ships with stub implementations (`write_file`, `read_file`, `execute_python`, `web_search`); they log/return placeholders rather than performing real actions. Wire them to real storage/execution/search backends before relying on them.
+- **Tools are repo-bound, not general-purpose** — `write_file`/`read_file`/`commit` operate on the selected GitHub repo (real, verified); `execute_python` and `web_search` remain stubs. Sandboxed execution/search backends are the natural next step.
 - **Defaults are dev-oriented** — CORS allows all origins, the API key defaults to `dev-key-change-me`, and builds expire from Redis after 7 days. Harden all three before production.
 - **Plan cap** — a build executes at most 5 sub-tasks from the planner's plan.
 - **Retries** — unapproved steps are retried at most once; the failure mode for a majority-failed swarm is fail-fast.

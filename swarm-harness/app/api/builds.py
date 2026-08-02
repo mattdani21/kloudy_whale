@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import List, Optional, Literal
-from app.models import AgentConfig, BuildState
+from app.models import AgentConfig, BuildState, RepoConfig
 from app.swarm_coordinator import SwarmCoordinator
 from app.persistence import RedisStore
 from app.config import CONFIG
@@ -23,11 +23,16 @@ class BuildRequest(BaseModel):
     strategy: Literal["single", "swarm", "debate"] = "swarm"
     token_budget: int = 4000000
     slack_webhook: Optional[str] = None
+    repo: Optional[RepoConfig] = None  # GitHub repo the build writes to
 
 class RespondRequest(BaseModel):
     response: str
 
 def _build_summary(build) -> dict:
+    meta = dict(build.metadata)
+    repo = meta.pop("repo", None)
+    if repo:
+        repo = {k: v for k, v in repo.items() if k != "token"}  # never expose the PAT
     return {
         "id": build.id,
         "state": build.state.value,
@@ -36,13 +41,16 @@ def _build_summary(build) -> dict:
         "needs_human": build.state == BuildState.WAITING_HUMAN,
         "human_question": build.human_input_queue[-1] if build.human_input_queue else None,
         "final_output": build.final_output,
+        "repo": repo,
+        "files_written": meta.pop("files_written", []),
+        "commit_sha": meta.pop("commit_sha", None),
         "steps": [{"id": s.id, "role": s.role.value, "provider": s.provider.value, "status": "done" if s.completed_at else "pending", "tokens": s.tokens_used, "error": s.error} for s in build.steps],
-        "errors": build.error_log
+        "errors": build.error_log,
     }
 
 @router.post("/v1/build")
 async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
-    build_id = await coordinator.submit(req.prompt, req.agents, req.token_budget, req.strategy)
+    build_id = await coordinator.submit(req.prompt, req.agents, req.token_budget, req.strategy, repo=req.repo)
     if req.slack_webhook:
         build = await store.load(build_id)
         build.metadata["slack_webhook"] = req.slack_webhook
@@ -52,7 +60,8 @@ async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
         "state": "queued",
         "status_url": f"/v1/build/{build_id}",
         "websocket_url": f"/v1/build/{build_id}/stream",
-        "estimated_duration": "120s"
+        "estimated_duration": "120s",
+        "repo": None if not req.repo else {"owner": req.repo.owner, "name": req.repo.name, "branch": req.repo.branch},
     }
 
 @router.get("/v1/build/{build_id}")

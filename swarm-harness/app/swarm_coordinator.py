@@ -4,15 +4,42 @@ import json
 import hashlib
 import re
 from datetime import datetime
-from typing import List, Dict
-from app.models import SwarmBuild, BuildState, AgentConfig, AgentRole, Step
+from typing import List, Dict, Optional
+from app.models import SwarmBuild, BuildState, AgentConfig, AgentRole, Step, RepoConfig
 from app.llm_router import LLMRouter
 from app.agent_pool import AgentPool
 from app.persistence import RedisStore
 from app.notifications import NotificationDispatcher
 from app.state_machine import can_transition
+from app.github_client import GitHubRepoClient
 
 HUMAN_INPUT_TAG = "[HUMAN_INPUT]"
+
+REPO_MANIFEST_INSTRUCTION = (
+    "Output ONLY a JSON array of file objects: "
+    '[{"path": "<repo-relative path>", "content": "<complete file content>"}, ...]. '
+    "Every file the sub-task needs must be its own object with full content. No prose, no markdown fences."
+)
+
+def _parse_file_manifest(text: str):
+    """Parse a coder's output into {path: content}. Tolerant of markdown fences."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r'\[.*\]', text, re.DOTALL)
+        if not m:
+            return None
+        try:
+            data = json.loads(m.group())
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(data, list):
+        return None
+    files = {}
+    for item in data:
+        if isinstance(item, dict) and item.get("path") and item.get("content") is not None:
+            files[str(item["path"]).lstrip("/")] = str(item["content"])
+    return files or None
 
 class SwarmCoordinator:
     def __init__(self):
@@ -21,7 +48,7 @@ class SwarmCoordinator:
         self.router = LLMRouter()
         self.pool = AgentPool(self.router, self.store)
 
-    async def submit(self, prompt: str, agents: List[AgentConfig], token_budget: int = 4000000, strategy: str = "swarm") -> str:
+    async def submit(self, prompt: str, agents: List[AgentConfig], token_budget: int = 4000000, strategy: str = "swarm", repo: Optional[RepoConfig] = None) -> str:
         build_id = hashlib.sha256(f"{prompt}{datetime.utcnow().isoformat()}".encode()).hexdigest()[:12]
         build = SwarmBuild(
             id=build_id,
@@ -31,6 +58,8 @@ class SwarmCoordinator:
             agents=agents,
             token_budget_total=token_budget
         )
+        if repo:
+            build.metadata["repo"] = {"owner": repo.owner, "name": repo.name, "token": repo.token, "branch": repo.branch}
         await self.store.save(build)
         asyncio.create_task(self._run(build))
         return build_id
@@ -70,14 +99,18 @@ class SwarmCoordinator:
                     await self._transition(build, BuildState.EXECUTING)
 
                     # Create execution steps from the plan
+                    repo_mode = bool(build.metadata.get("repo"))
                     for i, task in enumerate(plan[:5]):  # Max 5 parallel tasks
                         agent = next((a for a in build.agents if a.role.value == task.get("role", "coder")), build.agents[0])
+                        task_prompt = task["description"]
+                        if repo_mode and agent.role in (AgentRole.CODER, AgentRole.TESTER):
+                            task_prompt += "\n\n" + REPO_MANIFEST_INSTRUCTION
                         step = Step(
                             id=f"{build.id}_step_{i}",
                             agent_id=f"{agent.role.value}_{agent.provider.value}",
                             role=agent.role,
                             provider=agent.provider,
-                            prompt=task["description"]
+                            prompt=task_prompt
                         )
                         build.steps.append(step)
                     await self.store.save(build)
@@ -107,6 +140,18 @@ class SwarmCoordinator:
                     await self._transition(build, BuildState.FAILED)
                     await self.notifier.notify(build, "❌ Swarm failed: majority of agents failed", "high")
                     return
+
+                # Repo mode: collect file manifests produced by coder steps
+                if build.metadata.get("repo"):
+                    manifest = {}
+                    for s in build.steps:
+                        if s.result and s.role in (AgentRole.CODER, AgentRole.TESTER):
+                            parsed = _parse_file_manifest(s.result)
+                            if parsed:
+                                manifest.update(parsed)
+                    build.context["manifest"] = manifest
+                    build.context["staged_files"] = list(manifest.keys())
+                    await self.store.save(build)
 
                 await self._transition(build, BuildState.REVIEWING)
 
@@ -149,6 +194,11 @@ class SwarmCoordinator:
                         retry_futures.append(self.pool.execute_step(build, step, agent))
                     await asyncio.gather(*retry_futures)
 
+                # Phase 3.5: Repo write + verify (repo mode only)
+                repo_meta = build.metadata.get("repo")
+                if repo_meta:
+                    await self._repo_write_and_verify(build, repo_meta)
+
                 # Phase 4: Merge
                 await self._transition(build, BuildState.MERGING)
                 merger = next((a for a in build.agents if a.role == AgentRole.MERGER), build.agents[0])
@@ -164,6 +214,14 @@ class SwarmCoordinator:
                 final_output, merge_tokens = await self.router.route(merge_messages, merger.provider.value, merger.model, merger.max_tokens)
                 build.token_usage += merge_tokens
                 build.final_output = final_output
+                if repo_meta and build.metadata.get("commit_sha"):
+                    files = build.metadata.get("files_written", [])
+                    build.final_output += (
+                        f"\n\n---\n✅ **Written to GitHub:** {repo_meta['owner']}/{repo_meta['name']}"
+                        f" ({repo_meta.get('branch') or 'default branch'}) · commit `{build.metadata['commit_sha'][:10]}`\n"
+                        f"Files: {', '.join(files) if files else '(none — see notes)'}\n"
+                        f"Verification: {build.context.get('verification', 'n/a')}"
+                    )
 
                 await self._transition(build, BuildState.COMPLETED)
                 await self.notifier.notify(build, f"✅ Swarm complete! Tokens: {build.token_usage}", "normal")
@@ -173,6 +231,79 @@ class SwarmCoordinator:
                 if build.state not in (BuildState.FAILED, BuildState.CANCELLED):
                     await self._transition(build, BuildState.FAILED)
                 await self.notifier.notify(build, f"❌ Swarm failed: {e}", "high")
+
+    async def _repo_write_and_verify(self, build: SwarmBuild, repo_meta: Dict):
+        """Write staged file manifests to the GitHub repo, then verify done-or-needs-work.
+
+        Verifier agent reads the repo back and compares against the request; if work
+        is missing and token budget remains, one extra coder round fixes the gaps.
+        """
+        # Collect manifests from all coder/tester steps (post-retry state)
+        manifest = {}
+        for s in build.steps:
+            if s.result and s.role in (AgentRole.CODER, AgentRole.TESTER):
+                parsed = _parse_file_manifest(s.result)
+                if parsed:
+                    manifest.update(parsed)
+        build.context["manifest"] = manifest
+        await self.store.save(build)
+
+        try:
+            async with GitHubRepoClient(repo_meta["owner"], repo_meta["name"], repo_meta["token"], repo_meta.get("branch")) as client:
+                if manifest:
+                    commit_info = await client.write_files(
+                        manifest,
+                        f"DeepKimi build {build.id}: {build.prompt[:80]}",
+                    )
+                    build.metadata["files_written"] = commit_info["files"]
+                    build.metadata["commit_sha"] = commit_info["commit"]
+                    await self.store.save(build)
+
+                # Verify: read the repo back; is the work done or does it need more?
+                verifier = next((a for a in build.agents if a.role == AgentRole.REVIEWER), build.agents[0])
+                files = await client.list_files()
+                file_list = "\n".join(files[:300])
+                verify_messages = [
+                    {"role": "system", "content": verifier.system_prompt or "You verify that completed work matches the request."},
+                    {"role": "user", "content": (
+                        f"Original request: {build.prompt}\n\n"
+                        f"Files currently in the repo:\n{file_list}\n\n"
+                        "Compare the request against the files present. If the work is complete, "
+                        "reply with exactly 'DONE'. If anything is missing or broken, reply with a "
+                        "short list of what still needs work."
+                    )},
+                ]
+                verify_text, verify_tokens = await self.router.route(verify_messages, verifier.provider.value, verifier.model, verifier.max_tokens)
+                build.token_usage += verify_tokens
+                done = verify_text.strip().upper().startswith("DONE")
+                build.context["verifier_report"] = verify_text
+                build.context["verification"] = "done" if done else "needs_work"
+                await self.store.save(build)
+
+                if not done and build.token_usage < build.token_budget_total * 0.8:
+                    coder = next((a for a in build.agents if a.role == AgentRole.CODER), build.agents[0])
+                    gap_step = Step(
+                        id=f"{build.id}_gapfix",
+                        agent_id=f"coder_{coder.provider.value}",
+                        role=AgentRole.CODER,
+                        provider=coder.provider,
+                        prompt=f"Complete the missing work:\n{verify_text}\n\n{REPO_MANIFEST_INSTRUCTION}",
+                    )
+                    build.steps.append(gap_step)
+                    await self.store.save(build)
+                    await self.pool.execute_step(build, gap_step, coder)
+                    gap_manifest = _parse_file_manifest(gap_step.result) if gap_step.result else None
+                    if gap_manifest:
+                        commit_info = await client.write_files(
+                            gap_manifest,
+                            f"DeepKimi build {build.id}: follow-up ({verify_text[:60]})",
+                        )
+                        build.metadata["files_written"] = sorted(set(build.metadata.get("files_written", [])) | set(commit_info["files"]))
+                        build.metadata["commit_sha"] = commit_info["commit"]
+                        await self.store.save(build)
+        except Exception as e:
+            build.error_log.append(f"Repo write failed: {e}")
+            await self.notifier.notify(build, f"⚠️ Repo write failed: {e}", "high")
 
     async def human_input(self, build_id: str, response: str) -> Dict:
         build = await self.store.load(build_id)

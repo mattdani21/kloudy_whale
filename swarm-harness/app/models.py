@@ -55,6 +55,14 @@ class Step:
     completed_at: Optional[str] = None
 
 @dataclass
+class RepoConfig:
+    """GitHub repo the build's files are written to (PAT stored per-build, never logged)."""
+    owner: str
+    name: str
+    token: str
+    branch: Optional[str] = None  # None -> default branch
+
+@dataclass
 class SwarmBuild:
     id: str
     prompt: str

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepKimi — Swarm Agent Coding Platform</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
+          --accent:#2f81f7; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 16px 60px; }
+  h1 { font-size:22px; margin:0 0 4px; } h1 span { color:var(--muted); font-weight:400; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 12px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
+  input, textarea, select { width:100%; background:#0d1117; color:var(--text); border:1px solid var(--border);
+          border-radius:6px; padding:8px 10px; font:inherit; }
+  textarea { min-height:90px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .full { grid-column:1 / -1; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:10px 18px; font:inherit;
+           font-weight:600; cursor:pointer; } button:disabled { opacity:.5; cursor:default; }
+  #status { display:none; } #status.on { display:block; }
+  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  .st-queued,.st-planning,.st-executing { background:#1f6feb33; color:#79c0ff; }
+  .st-reviewing,.st-merging { background:#d2992233; color:#e3b341; }
+  .st-waiting_human { background:#d2992233; color:#e3b341; }
+  .st-completed { background:#3fb95033; color:#56d364; }
+  .st-failed,.st-cancelled { background:#f8514933; color:#ff7b72; }
+  .meta { color:var(--muted); font-size:13px; margin:6px 0; }
+  pre { background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:12px; overflow:auto;
+        white-space:pre-wrap; word-break:break-word; max-height:480px; }
+  .steps { font-size:13px; } .steps div { padding:2px 0; border-bottom:1px dashed #21262d; }
+  .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+  a { color:#79c0ff; }
+  .row { display:flex; gap:10px; align-items:center; } .row .grow { flex:1; }
+  #human { display:none; background:var(--panel); border:1px solid var(--warn); border-radius:8px; padding:14px; margin-bottom:16px; }
+  #human.on { display:block; }
+  .err { color:var(--err); }
+  details { margin-top:8px; } summary { cursor:pointer; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DeepKimi <span>— swarm agent coding platform</span></h1>
+  <p class="sub">Plan → code → review → merge, with a swarm of DeepSeek + Kimi agents. Output lands as a commit in your GitHub repo.</p>
+
+  <div id="human">
+    <strong>🛑 The swarm needs your input:</strong>
+    <div id="human-q" class="meta"></div>
+    <div class="row"><input id="human-a" placeholder="Your answer…" class="grow">
+    <button id="human-send">Send</button></div>
+  </div>
+
+  <div class="panel">
+    <h2>1 · GitHub target repo</h2>
+    <div class="grid">
+      <div><label>Owner / organization</label><input id="repo-owner" placeholder="mattdani21"></div>
+      <div><label>Repo name</label><input id="repo-name" placeholder="my-project"></div>
+      <div><label>Personal access token (PAT)</label><input id="repo-token" type="password" placeholder="github_pat_…"></div>
+      <div><label>Branch (optional, default)</label><input id="repo-branch" placeholder="main"></div>
+      <div class="full hint">Fine-grained PAT with <b>Contents: Read and write</b> on the target repo. Stored only in this browser (localStorage) and in the build record for 7 days. The agent reads and writes this repo and verifies its work against it.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>2 · Build</h2>
+    <div class="grid">
+      <div class="full"><label>What should the swarm build?</label>
+        <textarea id="prompt" placeholder="e.g. Build a Flask TODO app with SQLite: app.py, templates, requirements.txt, README."></textarea></div>
+      <div><label>DeepKimi API key (from your deploy env)</label><input id="api-key" type="password" placeholder="X-API-Key"></div>
+      <div><label>Token budget (optional, default 4,000,000)</label><input id="budget" placeholder="4000000"></div>
+      <div class="full"><button id="start">🚀 Kick off build</button></div>
+    </div>
+  </div>
+
+  <div class="panel" id="status">
+    <h2>3 · Build status</h2>
+    <div class="row">
+      <span class="badge" id="state-badge">queued</span>
+      <span class="meta grow" id="build-id"></span>
+    </div>
+    <div class="meta" id="tokens"></div>
+    <div class="meta" id="repo-info"></div>
+    <div id="steps" class="steps"></div>
+    <h2 style="margin-top:14px">Final output</h2>
+    <pre id="output">…</pre>
+    <details><summary>Errors / notes</summary><pre id="errors" class="err">…</pre></details>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const KEY_STORE = ["repo-owner","repo-name","repo-token","repo-branch","api-key","prompt"];
+KEY_STORE.forEach(id => { const v = localStorage.getItem("dk:"+id); if (v) $(id).value = v; });
+KEY_STORE.forEach(id => $(id).addEventListener("input", () => localStorage.setItem("dk:"+id, $(id).value)));
+
+let currentBuild = null, ws = null;
+
+function setState(s) {
+  $("state-badge").className = "badge st-" + s;
+  $("state-badge").textContent = s.replace(/_/g, " ");
+}
+
+async function api(path, method, body) {
+  const r = await fetch(path, {
+    method: method || "GET",
+    headers: { "X-API-Key": $("api-key").value, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.detail || j.message || r.status) + "");
+  return j;
+}
+
+async function start() {
+  const repo = {
+    owner: $("repo-owner").value.trim(), name: $("repo-name").value.trim(),
+    token: $("repo-token").value.trim(),
+    branch: $("repo-branch").value.trim() || null,
+  };
+  if (!repo.owner || !repo.name || !repo.token) { alert("Fill in the GitHub repo owner, name and PAT."); return; }
+  if (!$("api-key").value) { alert("Fill in the DeepKimi API key."); return; }
+  if (!$("prompt").value.trim()) { alert("Describe what the swarm should build."); return; }
+  const budget = parseInt($("budget").value || "4000000", 10);
+  const body = {
+    prompt: $("prompt").value.trim(),
+    token_budget: Number.isFinite(budget) ? budget : 4000000,
+    repo,
+    agents: [
+      { role: "planner", provider: "deepseek", model: "deepseek-v4-flash" },
+      { role: "coder", provider: "kimi", model: "kimi-k3" },
+      { role: "reviewer", provider: "deepseek", model: "deepseek-v4-flash" },
+      { role: "merger", provider: "kimi", model: "kimi-k3" },
+    ],
+  };
+  $("start").disabled = true;
+  try {
+    const r = await api("/v1/build", "POST", body);
+    currentBuild = r.build_id;
+    $("status").classList.add("on");
+    $("build-id").textContent = "build " + currentBuild + (r.repo ? " → " + r.repo.owner + "/" + r.repo.name : "");
+    $("output").textContent = "swarm is working…";
+    $("errors").textContent = "";
+    $("steps").innerHTML = "";
+    setState("queued");
+    connectWS(currentBuild);
+  } catch (e) { alert("Submit failed: " + e.message); $("start").disabled = false; }
+}
+
+function connectWS(buildId) {
+  if (ws) ws.close();
+  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host +
+              "/v1/build/" + buildId + "/stream?api_key=" + encodeURIComponent($("api-key").value);
+  ws = new WebSocket(url);
+  ws.onmessage = ev => render(JSON.parse(ev.data));
+  ws.onclose = () => { $("start").disabled = false; };
+  ws.onerror = () => { $("start").disabled = false; };
+}
+
+function render(d) {
+  setState(d.state);
+  $("tokens").textContent = "tokens: " + (d.token_usage || 0) + (d.budget_total ? " / " + d.budget_total : "");
+  $("steps").innerHTML = (d.steps_done !== undefined)
+    ? "<div>steps: " + d.steps_done + " / " + d.steps_total + "</div>" : "";
+  if (d.needs_human) {
+    $("human").classList.add("on");
+    $("human-q").textContent = d.human_question ? d.human_question.question : "…";
+    $("human-send").onclick = async () => {
+      try { await api("/v1/build/" + currentBuild + "/respond", "POST", { response: $("human-a").value });
+            $("human").classList.remove("on"); $("human-a").value = ""; }
+      catch (e) { alert("Respond failed: " + e.message); }
+    };
+  }
+  if (d.final_output) $("output").textContent = d.final_output;
+}
+
+// Load latest build on open? No — manual kickoff only.
+$("start").onclick = start;
+</script>
+</body>
+</html>
