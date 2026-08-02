@@ -1,0 +1,28 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - KIMI_API_KEY=${KIMI_API_KEY}
+      - API_KEY=${API_KEY:-dev-key-change-me}
+      - NOTIFICATION_WEBHOOK=${NOTIFICATION_WEBHOOK}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis_data:
