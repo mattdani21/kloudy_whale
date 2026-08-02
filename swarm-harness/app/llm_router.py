@@ -30,17 +30,12 @@ class LLMRouter:
             "max_tokens": max_tokens,
             "stream": False
         }
-        async with self._lock:
-            async with self.session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {CONFIG.DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                json=payload
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                content = data["choices"][0]["message"]["content"]
-                tokens = data.get("usage", {}).get("total_tokens", 0)
-                return content, tokens
+        return await self._post_and_parse(
+            "https://api.deepseek.com/v1/chat/completions",
+            CONFIG.DEEPSEEK_API_KEY,
+            payload,
+            "deepseek",
+        )
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     async def call_kimi(self, messages: List[Dict], model: str = "kimi-k3", max_tokens: int = 4000) -> Tuple[str, int]:
@@ -51,13 +46,24 @@ class LLMRouter:
             "max_tokens": max_tokens,
             "stream": False
         }
+        return await self._post_and_parse(
+            "https://api.moonshot.cn/v1/chat/completions",
+            CONFIG.KIMI_API_KEY,
+            payload,
+            "kimi",
+        )
+
+    async def _post_and_parse(self, url: str, api_key: str, payload: dict, provider: str) -> Tuple[str, int]:
+        """POST to an OpenAI-compatible endpoint; surface HTTP errors with status + body."""
         async with self._lock:
             async with self.session.post(
-                "https://api.moonshot.cn/v1/chat/completions",
-                headers={"Authorization": f"Bearer {CONFIG.KIMI_API_KEY}", "Content-Type": "application/json"},
+                url,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json=payload
             ) as resp:
-                resp.raise_for_status()
+                if resp.status >= 400:
+                    body = (await resp.text())[:300]
+                    raise RuntimeError(f"{provider} API error {resp.status}: {body}")
                 data = await resp.json()
                 content = data["choices"][0]["message"]["content"]
                 tokens = data.get("usage", {}).get("total_tokens", 0)
