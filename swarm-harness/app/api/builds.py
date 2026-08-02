@@ -21,7 +21,7 @@ class BuildRequest(BaseModel):
     prompt: str
     agents: List[AgentConfig]
     strategy: Literal["single", "swarm", "debate"] = "swarm"
-    token_budget: int = 50000
+    token_budget: int = 4000000
     slack_webhook: Optional[str] = None
 
 class RespondRequest(BaseModel):

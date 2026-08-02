@@ -14,7 +14,8 @@ class LLMRouter:
         self._lock = asyncio.Lock()
 
     async def __aenter__(self):
-        timeout = aiohttp.ClientTimeout(total=120, connect=10)
+        # 600s total: long reasoning merges on big builds exceed 120s
+        timeout = aiohttp.ClientTimeout(total=600, connect=10)
         self.session = aiohttp.ClientSession(timeout=timeout)
         return self
 

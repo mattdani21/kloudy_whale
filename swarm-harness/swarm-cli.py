@@ -20,7 +20,7 @@ def submit(prompt: str):
                 {"role": "reviewer", "provider": "deepseek", "model": "deepseek-v4-flash"},
                 {"role": "merger", "provider": "kimi", "model": "kimi-k3"}
             ],
-            "token_budget": 40000,
+            "token_budget": 4000000,
         }
     )
     r.raise_for_status()

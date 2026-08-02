@@ -33,7 +33,7 @@ class AgentConfig:
     provider: ModelProvider
     model: str  # e.g., "deepseek-chat", "kimi-k3"
     temperature: float = 0.7
-    max_tokens: int = 4000
+    max_tokens: int = 16384  # per-call output cap; deepseek-v4-flash reasons before answering, needs headroom
     system_prompt: str = ""
     token_budget: int = 20000
 
@@ -64,7 +64,7 @@ class SwarmBuild:
     steps: List[Step] = field(default_factory=list)
     context: Dict = field(default_factory=dict)
     token_usage: int = 0
-    token_budget_total: int = 50000
+    token_budget_total: int = 4000000  # up to 4M tokens per build by default
     human_input_queue: List[Dict] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())

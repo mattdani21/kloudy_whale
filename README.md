@@ -92,7 +92,7 @@ At any point the plan or a step can request clarification. The build enters `wai
 | **Agent** | A role + provider + model + temperature + system prompt. Agents are declared per-build in the request. |
 | **Step** | A single sub-task executed by one agent: prompt, result, review verdict, tokens used, duration, retry count, error. |
 | **Strategy** | `swarm` (default), `single`, or `debate` — declared on the build; `swarm` is the implemented default pipeline. |
-| **Token budget** | Per-build cap (default 50,000). Execution halts with an error once `token_usage >= token_budget_total`. |
+| **Token budget** | Per-build cap (default **4,000,000** tokens). Execution halts with an error once `token_usage >= token_budget_total`. |
 
 ### Agent roles (`AgentRole`)
 
@@ -209,7 +209,7 @@ All configuration is environment-driven (`app/config.py`).
 | `API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |
-| `DEFAULT_TOKEN_BUDGET` | `50000` | Default per-build token budget |
+| `DEFAULT_TOKEN_BUDGET` | `4000000` | Default per-build token budget (up to 4M) |
 | `NOTIFICATION_WEBHOOK` | *(empty)* | Generic webhook URL receiving build events |
 | `LOG_LEVEL` | `INFO` | Logging level (used by the worker) |
 
@@ -233,7 +233,7 @@ All routes except `GET /v1/health` require the header `X-API-Key: <API_KEY>`.
     {"role": "merger",   "provider": "kimi",     "model": "kimi-k3"}
   ],
   "strategy": "swarm",
-  "token_budget": 50000,
+  "token_budget": 4000000,
   "slack_webhook": "https://hooks.slack.com/services/..."
 }
 ```
@@ -305,7 +305,7 @@ The server closes the socket when the build reaches a terminal state (and sends 
 
 ## CLI
 
-The interactive CLI (`swarm-cli.py`) is the fastest way to try the system end-to-end: it submits a default 4-agent build (planner/reviewer on DeepSeek, coder/merger on Kimi, 40k token budget — coder/merger fall back to DeepSeek automatically if no Kimi key is set), polls until done, **prompts you inline when a human gate fires**, and prints the final output.
+The interactive CLI (`swarm-cli.py`) is the fastest way to try the system end-to-end: it submits a default 4-agent build (planner/reviewer on DeepSeek, coder/merger on Kimi, 4M token budget — coder/merger fall back to DeepSeek automatically if no Kimi key is set), polls until done, **prompts you inline when a human gate fires**, and prints the final output.
 
 ```bash
 export SWARM_API_URL=http://localhost:8000   # default

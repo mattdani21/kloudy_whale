@@ -21,7 +21,7 @@ class SwarmCoordinator:
         self.router = LLMRouter()
         self.pool = AgentPool(self.router, self.store)
 
-    async def submit(self, prompt: str, agents: List[AgentConfig], token_budget: int = 50000, strategy: str = "swarm") -> str:
+    async def submit(self, prompt: str, agents: List[AgentConfig], token_budget: int = 4000000, strategy: str = "swarm") -> str:
         build_id = hashlib.sha256(f"{prompt}{datetime.utcnow().isoformat()}".encode()).hexdigest()[:12]
         build = SwarmBuild(
             id=build_id,
@@ -55,7 +55,7 @@ class SwarmCoordinator:
                         {"role": "system", "content": planner.system_prompt or "You are a technical planner. Break requests into executable sub-tasks."},
                         {"role": "user", "content": f"Plan this build: {build.prompt}\n\nOutput JSON array of sub-tasks with 'description', 'role' (coder/reviewer/tester). If a sub-task needs human clarification, prefix its description with {HUMAN_INPUT_TAG}."}
                     ]
-                    plan_text, plan_tokens = await self.router.route(plan_messages, planner.provider.value, planner.model)
+                    plan_text, plan_tokens = await self.router.route(plan_messages, planner.provider.value, planner.model, planner.max_tokens)
                     build.token_usage += plan_tokens
 
                     # Parse plan
@@ -161,7 +161,7 @@ class SwarmCoordinator:
                     {"role": "system", "content": merger.system_prompt or "You are a tech lead. Combine outputs into a final deliverable."},
                     {"role": "user", "content": f"Original request: {build.prompt}\n\nAgent outputs:\n{merge_context}"}
                 ]
-                final_output, merge_tokens = await self.router.route(merge_messages, merger.provider.value, merger.model)
+                final_output, merge_tokens = await self.router.route(merge_messages, merger.provider.value, merger.model, merger.max_tokens)
                 build.token_usage += merge_tokens
                 build.final_output = final_output
 

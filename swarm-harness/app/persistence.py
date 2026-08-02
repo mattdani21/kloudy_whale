@@ -55,7 +55,7 @@ class RedisStore:
             steps=[self._dict_to_step(s) for s in d.get("steps", [])],
             context=d.get("context", {}),
             token_usage=d.get("token_usage", 0),
-            token_budget_total=d.get("token_budget_total", 50000),
+            token_budget_total=d.get("token_budget_total", 4000000),
             human_input_queue=d.get("human_input_queue", []),
             created_at=d["created_at"],
             updated_at=d["updated_at"],

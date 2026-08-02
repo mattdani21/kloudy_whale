@@ -11,7 +11,7 @@ def test_enum_values():
 def test_agent_config_defaults():
     agent = AgentConfig(role=AgentRole.CODER, provider=ModelProvider.KIMI, model="kimi-k3")
     assert agent.temperature == 0.7
-    assert agent.max_tokens == 4000
+    assert agent.max_tokens == 16384
     assert agent.system_prompt == ""
     assert agent.token_budget == 20000
 
@@ -30,7 +30,7 @@ def test_swarm_build_defaults():
     build = SwarmBuild(id="b1", prompt="build something", state=BuildState.QUEUED)
     assert build.strategy == "swarm"
     assert build.token_usage == 0
-    assert build.token_budget_total == 50000
+    assert build.token_budget_total == 4000000
     assert build.agents == []
     assert build.steps == []
     assert build.context == {}
