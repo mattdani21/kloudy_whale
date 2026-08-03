@@ -25,6 +25,12 @@ class Config:
     API_KEYS: tuple = field(default_factory=_api_keys_tuple)
     MAX_STEPS: int = int(os.getenv("MAX_STEPS", "25"))
     DEFAULT_TOKEN_BUDGET: int = int(os.getenv("DEFAULT_TOKEN_BUDGET", "4000000"))
+    # Durability worker: reset builds stuck in a running state after this many minutes.
+    STALE_BUILD_TTL_MINUTES: int = int(os.getenv("STALE_BUILD_TTL_MINUTES", "15"))
+    # Quotas (0 = unlimited). MAX_CONCURRENT_BUILDS caps in-flight (non-terminal) builds;
+    # DAILY_TOKEN_BUDGET caps total token usage across builds created in the last 24h.
+    MAX_CONCURRENT_BUILDS: int = int(os.getenv("MAX_CONCURRENT_BUILDS", "0"))
+    DAILY_TOKEN_BUDGET: int = int(os.getenv("DAILY_TOKEN_BUDGET", "0"))
     NOTIFICATION_WEBHOOK: str = os.getenv("NOTIFICATION_WEBHOOK", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     # Model used when a "kimi" agent runs without KIMI_API_KEY set.

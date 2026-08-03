@@ -1,5 +1,6 @@
 # app/api/builds.py
 import re
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from typing import List, Optional, Literal
@@ -16,10 +17,48 @@ store = RedisStore()
 
 REPO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 
+TERMINAL_STATES = {BuildState.COMPLETED, BuildState.FAILED, BuildState.CANCELLED}
+
 async def verify_api_key(x_api_key: str = Header(...)):
     if x_api_key not in CONFIG.API_KEYS:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key
+
+async def _enforce_quotas():
+    """Reject the build (429) when concurrency or the daily token budget is exceeded.
+
+    Both caps are env-configured; 0 (default) means unlimited.
+    """
+    max_concurrent = CONFIG.MAX_CONCURRENT_BUILDS
+    daily_budget = CONFIG.DAILY_TOKEN_BUDGET
+    if not max_concurrent and not daily_budget:
+        return
+    builds = await store.list(limit=1000)
+    now = datetime.utcnow()
+    day_ago = now - timedelta(hours=24)
+    active = 0
+    daily_tokens = 0
+    for b in builds:
+        if b.state not in TERMINAL_STATES:
+            active += 1
+        try:
+            created = datetime.fromisoformat(b.created_at)
+        except (ValueError, TypeError):
+            created = now
+        if created >= day_ago:
+            daily_tokens += b.token_usage
+    if max_concurrent and active >= max_concurrent:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many concurrent builds ({active} >= {max_concurrent}). Wait for one to finish.",
+            headers={"Retry-After": "30"},
+        )
+    if daily_budget and daily_tokens >= daily_budget:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily token budget exhausted ({daily_tokens} >= {daily_budget}).",
+            headers={"Retry-After": "3600"},
+        )
 
 class BuildRequest(BaseModel):
     prompt: str
@@ -55,6 +94,7 @@ def _build_summary(build) -> dict:
 
 @router.post("/v1/build")
 async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
+    await _enforce_quotas()
     repo = req.repo
     created_repo = None
     if req.create_repo:

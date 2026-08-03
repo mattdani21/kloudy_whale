@@ -112,6 +112,11 @@
     <pre id="output">…</pre>
     <details><summary>Errors / notes</summary><pre id="errors" class="err">…</pre></details>
   </div>
+
+  <div class="panel" id="history">
+    <h2>Recent builds</h2>
+    <div id="history-list" class="steps"></div>
+  </div>
 </div>
 
 <script>
@@ -128,7 +133,7 @@ function syncModeUI() {
 $("repo-mode").addEventListener("change", () => { syncModeUI(); localStorage.setItem("dk:repo-mode", $("repo-mode").value); });
 syncModeUI();
 
-let currentBuild = null, ws = null;
+let currentBuild = null;
 
 function setState(s) {
   $("state-badge").className = "badge st-" + s;
@@ -185,6 +190,8 @@ async function start() {
   try {
     const r = await api("/v1/build", "POST", body);
     currentBuild = r.build_id;
+    wsRetry = 0;
+    lastState = "queued";
     $("status").classList.add("on");
     $("build-id").textContent = "build " + currentBuild + (r.repo_created ? " → 🆕 " + r.repo_created : (r.repo ? " → " + r.repo.owner + "/" + r.repo.name : ""));
     $("output").textContent = "swarm is working…";
@@ -195,14 +202,41 @@ async function start() {
   } catch (e) { alert("Submit failed: " + e.message); $("start").disabled = false; }
 }
 
+let ws = null, wsRetry = 0, lastState = "queued";
+const TERMINAL = ["completed", "failed", "cancelled"];
+
 function connectWS(buildId) {
   if (ws) ws.close();
   const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host +
               "/v1/build/" + buildId + "/stream?api_key=" + encodeURIComponent($("api-key").value);
-  ws = new WebSocket(url);
-  ws.onmessage = ev => render(JSON.parse(ev.data));
-  ws.onclose = () => { $("start").disabled = false; };
-  ws.onerror = () => { $("start").disabled = false; };
+  const myWs = new WebSocket(url);
+  ws = myWs;
+  myWs.onmessage = ev => {
+    const d = JSON.parse(ev.data);
+    lastState = d.state || lastState;
+    wsRetry = 0;
+    render(d);
+  };
+  myWs.onclose = () => {
+    if (ws !== myWs) return;  // stale socket — a newer one replaced it
+    $("start").disabled = false;
+    if (currentBuild && !TERMINAL.includes(lastState)) {
+      const delay = Math.min(30000, 1000 * Math.pow(2, wsRetry++));  // 1s, 2s, 4s … 30s
+      setTimeout(() => { if (currentBuild) connectWS(currentBuild); }, delay);
+    }
+  };
+  myWs.onerror = () => { $("start").disabled = false; };
+}
+
+function showGate(question) {
+  $("human").classList.add("on");
+  $("human-q").textContent = question ? question.question : "…";
+  $("human-a").focus();
+  $("human-send").onclick = async () => {
+    try { await api("/v1/build/" + currentBuild + "/respond", "POST", { response: $("human-a").value });
+          $("human").classList.remove("on"); $("human-a").value = ""; }
+    catch (e) { alert("Respond failed: " + e.message); }
+  };
 }
 
 function render(d) {
@@ -210,20 +244,59 @@ function render(d) {
   $("tokens").textContent = "tokens: " + (d.token_usage || 0) + (d.budget_total ? " / " + d.budget_total : "");
   $("steps").innerHTML = (d.steps_done !== undefined)
     ? "<div>steps: " + d.steps_done + " / " + d.steps_total + "</div>" : "";
-  if (d.needs_human) {
-    $("human").classList.add("on");
-    $("human-q").textContent = d.human_question ? d.human_question.question : "…";
-    $("human-send").onclick = async () => {
-      try { await api("/v1/build/" + currentBuild + "/respond", "POST", { response: $("human-a").value });
-            $("human").classList.remove("on"); $("human-a").value = ""; }
-      catch (e) { alert("Respond failed: " + e.message); }
-    };
-  }
+  if (d.needs_human) showGate(d.human_question);
   if (d.final_output) $("output").textContent = d.final_output;
 }
 
-// Load latest build on open? No — manual kickoff only.
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function renderSummary(d) {
+  setState(d.state);
+  lastState = d.state;
+  $("tokens").textContent = "tokens: " + (d.token_usage || 0) + (d.budget_total ? " / " + d.budget_total : "");
+  $("steps").innerHTML = (d.steps || []).map(s =>
+    "<div>" + escapeHtml(s.role) + ": " + escapeHtml(s.status) +
+    (s.error ? " — <span class='err'>" + escapeHtml(s.error) + "</span>" : "") + "</div>").join("");
+  if (d.repo) $("repo-info").textContent = "repo: " + d.repo.owner + "/" + d.repo.name +
+    (d.repo.created ? " 🆕" : "") + (d.commit_sha ? " · " + d.commit_sha.slice(0, 10) : "");
+  $("errors").textContent = (d.errors || []).join("\n");
+  if (d.needs_human) showGate(d.human_question);
+  if (d.final_output) $("output").textContent = d.final_output;
+}
+
+async function loadHistory() {
+  try {
+    const r = await api("/v1/builds?limit=10");
+    const list = $("history-list");
+    const builds = r.builds || [];
+    list.innerHTML = builds.length ? builds.map(b =>
+      `<div class="row" style="cursor:pointer" data-id="${escapeHtml(b.id)}">
+         <span class="badge st-${escapeHtml(b.state)}">${escapeHtml(b.state)}</span>
+         <span class="grow">${escapeHtml((b.prompt || "").slice(0, 70))}</span>
+         <span class="meta">${escapeHtml((b.repo && (b.repo.owner + "/" + b.repo.name)) || "")}</span>
+       </div>`).join("") : "<div class='meta'>no builds yet</div>";
+    list.querySelectorAll("[data-id]").forEach(el => el.onclick = () => openBuild(el.dataset.id));
+  } catch (e) { /* history is best-effort — needs the API key to be set */ }
+}
+
+async function openBuild(buildId) {
+  currentBuild = buildId;
+  wsRetry = 0;
+  $("status").classList.add("on");
+  $("build-id").textContent = "build " + buildId;
+  $("output").textContent = "…";
+  $("errors").textContent = "";
+  try {
+    const d = await api("/v1/build/" + buildId);
+    await renderSummary(d);
+    connectWS(buildId);
+  } catch (e) { alert("Load failed: " + e.message); }
+}
+
 $("start").onclick = start;
+loadHistory();
 </script>
 </body>
 </html>

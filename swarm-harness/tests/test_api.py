@@ -240,6 +240,55 @@ def test_create_repo_github_error_surfaces_detail(client, monkeypatch):
 
 def test_auth_accepts_any_configured_key(client, monkeypatch):
     from types import SimpleNamespace
-    monkeypatch.setattr(builds_module, "CONFIG", SimpleNamespace(API_KEYS=("key-a", "key-b"), API_KEY="key-a"))
+    monkeypatch.setattr(builds_module, "CONFIG", SimpleNamespace(
+        API_KEYS=("key-a", "key-b"), API_KEY="key-a",
+        MAX_CONCURRENT_BUILDS=0, DAILY_TOKEN_BUDGET=0))
     assert client.post("/v1/build", json=BUILD_BODY, headers={"X-API-Key": "key-b"}).status_code == 200
     assert client.post("/v1/build", json=BUILD_BODY, headers={"X-API-Key": "key-c"}).status_code == 401
+
+
+# --- quotas ---
+
+def _quota_config(max_concurrent=0, daily_budget=0):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        API_KEYS=(CONFIG.API_KEY,),
+        API_KEY=CONFIG.API_KEY,
+        MAX_CONCURRENT_BUILDS=max_concurrent,
+        DAILY_TOKEN_BUDGET=daily_budget,
+    )
+
+def test_concurrency_limit_429(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module, "CONFIG", _quota_config(max_concurrent=1))
+    store.builds["active1"] = SwarmBuild(id="active1", prompt="p", state=BuildState.EXECUTING)
+    resp = client.post("/v1/build", json=BUILD_BODY, headers=API_KEY_HEADER)
+    assert resp.status_code == 429
+    assert resp.headers.get("retry-after") == "30"
+    assert "Too many concurrent builds" in resp.json()["detail"]
+    assert coordinator.submitted == []  # nothing submitted
+
+def test_concurrency_ok_under_limit(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module, "CONFIG", _quota_config(max_concurrent=2))
+    store.builds["active1"] = SwarmBuild(id="active1", prompt="p", state=BuildState.EXECUTING)
+    resp = client.post("/v1/build", json=BUILD_BODY, headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    assert len(coordinator.submitted) == 1
+
+def test_daily_token_budget_429(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module, "CONFIG", _quota_config(daily_budget=1000))
+    store.builds["b1"] = SwarmBuild(id="b1", prompt="p", state=BuildState.COMPLETED, token_usage=1500)
+    resp = client.post("/v1/build", json=BUILD_BODY, headers=API_KEY_HEADER)
+    assert resp.status_code == 429
+    assert resp.headers.get("retry-after") == "3600"
+    assert "token budget exhausted" in resp.json()["detail"]
+    assert coordinator.submitted == []
+
+def test_quota_disabled_when_zero(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module, "CONFIG", _quota_config(max_concurrent=0, daily_budget=0))
+    store.builds["active1"] = SwarmBuild(id="active1", prompt="p", state=BuildState.EXECUTING)
+    resp = client.post("/v1/build", json=BUILD_BODY, headers=API_KEY_HEADER)
+    assert resp.status_code == 200

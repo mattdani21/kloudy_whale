@@ -164,11 +164,15 @@ DeepKimi/
     └── requirements-dev.txt      # test deps
 ```
 
-**Execution model:** builds run **in-process** — `submit()` saves the build to Redis, then fires `asyncio.create_task(self._run(build))` and returns the id immediately. The optional worker (`worker/consumer.py`) is a **durability safety net**: it polls for builds stuck in `queued` (e.g. orphaned by an API restart) and re-runs them.
+**Execution model:** builds run **in-process** — `submit()` saves the build to Redis, then fires `asyncio.create_task(self._run(build))` and returns the id immediately. The worker (`worker/consumer.py`) is a **durability safety net** and ships in the container (see `start.sh`): it polls for builds stuck in `queued` (orphaned by an API restart) **and** builds stuck in a running state past `STALE_BUILD_TTL_MINUTES` (default 15), resetting them to `queued` and re-running them. `waiting_human` builds are never touched.
 
 ---
 
 ## Quick start
+
+### Option 0 — Try the live instance
+
+A public deployment runs at **https://kloudywhale-production.up.railway.app** (web UI at `/`, API docs at `/docs`). You need an API key from that deployment's owner to submit builds — the UI asks for it.
 
 ### Option A — Docker Compose (recommended)
 
@@ -213,7 +217,7 @@ A lightweight single-page UI is served at the app root (`/`). No build step, no 
 
 1. **GitHub target** — pick **"Use an existing repo"** (owner, repo name, fine-grained **PAT** with *Contents: Read and write* on the repo, optional branch) or **"Create a new repo"** (name, visibility, description; the repo is created under your PAT's account with `auto_init`, then the build writes to it). PAT with `repo` scope is required for create mode.
 2. **Build** — the prompt, the DeepKimi `API_KEY` for this deployment, and an optional token budget. The default 4-agent lineup (planner/reviewer DeepSeek, coder/merger Kimi — Kimi falls back to DeepSeek without a key) is used.
-3. **Status** — live progress over WebSocket: state badge, token usage, steps done, human-gate prompts (answered inline), and the final output with the commit hash + files written.
+3. **Status** — live progress over WebSocket (auto-reconnects with backoff if the connection drops): state badge, token usage, steps done, human-gate prompts (answered inline), and the final output with the commit hash + files written. A **Recent builds** panel lists past builds (click one to reopen it, or just to see where it got to).
 
 Security notes: the PAT and API key are stored only in your browser's `localStorage` and in the build record in Redis (7-day TTL). The PAT is **never** returned by any API endpoint (redacted from summaries) and is never logged.
 
@@ -232,6 +236,9 @@ All configuration is environment-driven (`app/config.py`).
 | `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |
+| `STALE_BUILD_TTL_MINUTES` | `15` | Durability worker: reset builds stuck in a running state (planning/executing/reviewing/merging) after this many minutes and re-run them (`waiting_human` never touched) |
+| `MAX_CONCURRENT_BUILDS` | `0` | Quota: reject new builds with `429` when this many builds are in-flight. `0` = unlimited |
+| `DAILY_TOKEN_BUDGET` | `0` | Quota: reject new builds with `429` when token usage across the last 24h reaches this. `0` = unlimited |
 | `DEFAULT_TOKEN_BUDGET` | `4000000` | Default per-build token budget (up to 4M) |
 | `NOTIFICATION_WEBHOOK` | *(empty)* | Generic webhook URL receiving build events |
 | `LOG_LEVEL` | `INFO` | Logging level (used by the worker) |
