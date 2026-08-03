@@ -1,5 +1,7 @@
 # DeepKimi — Persistent Agent Coding Platform
 
+[![CI](https://github.com/mattdani21/kloudy_whale/actions/workflows/ci.yml/badge.svg)](https://github.com/mattdani21/kloudy_whale/actions/workflows/ci.yml)
+
 > **Deep**Seek × Ki**mi** (Moonshot): a persistent, cloud-hosted agent coding platform. Kick off a build from anywhere — laptop, phone, CI, chat — and a swarm of specialized LLM agents (planner, coders, reviewers, merger) plans, codes, reviews, and merges the deliverable for you, with human-in-the-loop gates, token budgeting, live streaming, and notifications to your channels.
 
 DeepKimi is a **FastAPI-based agent orchestration platform** (codename *swarm-harness*) built to run **24/7 in the cloud**. You submit a build with one prompt; the system plans it, executes sub-tasks in parallel with agents drawn from DeepSeek and Kimi/Moonshot, cross-reviews the outputs, retries rejected work, merges everything into a final deliverable, and notifies you — all asynchronously, with full state persisted in Redis.
