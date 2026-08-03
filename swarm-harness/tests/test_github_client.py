@@ -122,6 +122,31 @@ async def test_http_error_surfaces_status():
 
 
 @pytest.mark.asyncio
+async def test_create_repo_returns_owner_and_url():
+    client = make_client(FakeSession([
+        (201, {"name": "new-proj", "full_name": "octo/new-proj",
+               "html_url": "https://github.com/octo/new-proj",
+               "owner": {"login": "octo"}}),
+    ]))
+    result = await client.create_repo("new-proj", True, "my desc")
+    assert result == {"owner": "octo", "name": "new-proj",
+                      "full_name": "octo/new-proj", "html_url": "https://github.com/octo/new-proj"}
+    method, url, payload = client._session.calls[0]
+    assert method == "POST"
+    assert url == "https://api.github.com/user/repos"
+    assert payload == {"name": "new-proj", "private": True, "description": "my desc", "auto_init": True}
+
+
+@pytest.mark.asyncio
+async def test_create_repo_propagates_errors():
+    client = make_client(FakeSession([(422, None, '{"message":"name already exists"}')]))
+    with pytest.raises(GitHubError) as exc:
+        await client.create_repo("dup", False, "")
+    assert exc.value.status == 422
+    assert "name already exists" in exc.value.body
+
+
+@pytest.mark.asyncio
 async def test_write_files_skips_empty_paths():
     client = make_client(FakeSession([
         (200, {"object": {"sha": "base"}}),

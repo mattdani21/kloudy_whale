@@ -63,6 +63,14 @@ class RepoConfig:
     branch: Optional[str] = None  # None -> default branch
 
 @dataclass
+class CreateRepoConfig:
+    """Create a NEW GitHub repo under the PAT's owner before the build writes to it."""
+    name: str
+    token: str
+    private: bool = True
+    description: str = ""
+
+@dataclass
 class SwarmBuild:
     id: str
     prompt: str

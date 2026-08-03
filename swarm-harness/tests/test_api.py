@@ -171,3 +171,75 @@ def test_cancel_terminal_build_400(client, fakes):
 
 def test_cancel_missing_404(client):
     assert client.post("/v1/build/missing/cancel", headers=API_KEY_HEADER).status_code == 404
+
+
+# --- create_repo (new repo) ---
+
+CREATE_REPO_BODY = {**BUILD_BODY, "create_repo": {
+    "name": "sparkly-octo", "token": "github_pat_secret", "private": True, "description": "built by DeepKimi"}}
+
+async def _fake_create_repo(self, name, private=True, description=""):
+    return {"owner": "mattdani21", "name": name, "full_name": f"mattdani21/{name}",
+            "html_url": f"https://github.com/mattdani21/{name}"}
+
+def test_create_build_with_create_repo(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module.GitHubRepoClient, "create_repo", _fake_create_repo)
+    resp = client.post("/v1/build", json=CREATE_REPO_BODY, headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["repo_created"] == "https://github.com/mattdani21/sparkly-octo"
+    assert data["repo"] == {"owner": "mattdani21", "name": "sparkly-octo", "branch": None}
+    build = coordinator.submitted[0]
+    assert build.metadata["repo"]["token"] == "github_pat_secret"  # PAT stored per-build
+    assert build.metadata["repo"]["created"] is True
+    assert build.metadata["repo"]["html_url"] == "https://github.com/mattdani21/sparkly-octo"
+
+def test_create_repo_conflicts_with_existing_repo(client, monkeypatch):
+    called = []
+    async def fake_create_repo(self, name, private=True, description=""):
+        called.append(name)
+        return {}
+    monkeypatch.setattr(builds_module.GitHubRepoClient, "create_repo", fake_create_repo)
+    body = {**CREATE_REPO_BODY, "repo": {"owner": "acme", "name": "proj", "token": "t"}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 400
+    assert called == []  # GitHub never contacted
+
+def test_create_repo_invalid_name_rejected_before_github(client, monkeypatch):
+    called = []
+    async def fake_create_repo(self, name, private=True, description=""):
+        called.append(name)
+        return {}
+    monkeypatch.setattr(builds_module.GitHubRepoClient, "create_repo", fake_create_repo)
+    body = {**BUILD_BODY, "create_repo": {"name": "Bad Name!", "token": "t"}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 400
+    assert called == []
+
+def test_create_repo_requires_token(client, monkeypatch):
+    called = []
+    async def fake_create_repo(self, name, private=True, description=""):
+        called.append(name)
+        return {}
+    monkeypatch.setattr(builds_module.GitHubRepoClient, "create_repo", fake_create_repo)
+    body = {**BUILD_BODY, "create_repo": {"name": "ok-name", "token": ""}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 400
+    assert called == []
+
+def test_create_repo_github_error_surfaces_detail(client, monkeypatch):
+    from app.github_client import GitHubError
+    async def fake_create_repo(self, name, private=True, description=""):
+        raise GitHubError(422, '{"message":"name already exists on this account"}')
+    monkeypatch.setattr(builds_module.GitHubRepoClient, "create_repo", fake_create_repo)
+    body = {**BUILD_BODY, "create_repo": {"name": "dup", "token": "t"}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 422
+    assert "name already exists" in resp.json()["detail"]
+
+def test_auth_accepts_any_configured_key(client, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(builds_module, "CONFIG", SimpleNamespace(API_KEYS=("key-a", "key-b"), API_KEY="key-a"))
+    assert client.post("/v1/build", json=BUILD_BODY, headers={"X-API-Key": "key-b"}).status_code == 200
+    assert client.post("/v1/build", json=BUILD_BODY, headers={"X-API-Key": "key-c"}).status_code == 401

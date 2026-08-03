@@ -55,13 +55,36 @@
   </div>
 
   <div class="panel">
-    <h2>1 · GitHub target repo</h2>
+    <h2>1 · GitHub target</h2>
     <div class="grid">
-      <div><label>Owner / organization</label><input id="repo-owner" placeholder="mattdani21"></div>
-      <div><label>Repo name</label><input id="repo-name" placeholder="my-project"></div>
-      <div><label>Personal access token (PAT)</label><input id="repo-token" type="password" placeholder="github_pat_…"></div>
-      <div><label>Branch (optional, default)</label><input id="repo-branch" placeholder="main"></div>
-      <div class="full hint">Fine-grained PAT with <b>Contents: Read and write</b> on the target repo. Stored only in this browser (localStorage) and in the build record for 7 days. The agent reads and writes this repo and verifies its work against it.</div>
+      <div class="full">
+        <label>Repo mode</label>
+        <select id="repo-mode">
+          <option value="existing">Use an existing repo</option>
+          <option value="create">Create a new repo</option>
+        </select>
+      </div>
+      <div id="existing-fields">
+        <div class="grid">
+          <div><label>Owner / organization</label><input id="repo-owner" placeholder="mattdani21"></div>
+          <div><label>Repo name</label><input id="repo-name" placeholder="my-project"></div>
+          <div><label>Branch (optional, default)</label><input id="repo-branch" placeholder="main"></div>
+        </div>
+      </div>
+      <div id="create-fields">
+        <div class="grid">
+          <div><label>New repo name</label><input id="create-name" placeholder="my-new-project"></div>
+          <div><label>Visibility</label>
+            <select id="create-visibility">
+              <option value="true">Private</option>
+              <option value="false">Public</option>
+            </select>
+          </div>
+          <div class="full"><label>Description (optional)</label><input id="create-description" placeholder="Built by DeepKimi"></div>
+        </div>
+      </div>
+      <div class="full"><label>Personal access token (PAT)</label><input id="repo-token" type="password" placeholder="github_pat_…"></div>
+      <div class="full hint">Fine-grained PAT with <b>Contents: Read and write</b> on the target repo (existing mode) or <b>repo</b> scope (create mode — the repo is created under your PAT's account). Stored only in this browser (localStorage) and in the build record for 7 days. The agent reads and writes this repo and verifies its work against it.</div>
     </div>
   </div>
 
@@ -93,9 +116,17 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const KEY_STORE = ["repo-owner","repo-name","repo-token","repo-branch","api-key","prompt"];
+const KEY_STORE = ["repo-owner","repo-name","repo-token","repo-branch","repo-mode","create-name","create-visibility","create-description","api-key","prompt"];
 KEY_STORE.forEach(id => { const v = localStorage.getItem("dk:"+id); if (v) $(id).value = v; });
 KEY_STORE.forEach(id => $(id).addEventListener("input", () => localStorage.setItem("dk:"+id, $(id).value)));
+
+function syncModeUI() {
+  const create = $("repo-mode").value === "create";
+  $("existing-fields").style.display = create ? "none" : "";
+  $("create-fields").style.display = create ? "" : "none";
+}
+$("repo-mode").addEventListener("change", () => { syncModeUI(); localStorage.setItem("dk:repo-mode", $("repo-mode").value); });
+syncModeUI();
 
 let currentBuild = null, ws = null;
 
@@ -116,19 +147,31 @@ async function api(path, method, body) {
 }
 
 async function start() {
-  const repo = {
-    owner: $("repo-owner").value.trim(), name: $("repo-name").value.trim(),
-    token: $("repo-token").value.trim(),
-    branch: $("repo-branch").value.trim() || null,
-  };
-  if (!repo.owner || !repo.name || !repo.token) { alert("Fill in the GitHub repo owner, name and PAT."); return; }
+  const token = $("repo-token").value.trim();
+  const mode = $("repo-mode").value;
+  let repo = null, createRepo = null;
+  if (mode === "create") {
+    createRepo = {
+      name: $("create-name").value.trim(),
+      token,
+      private: $("create-visibility").value === "true",
+      description: $("create-description").value.trim(),
+    };
+    if (!createRepo.name || !token) { alert("Fill in the new repo name and PAT."); return; }
+  } else {
+    repo = {
+      owner: $("repo-owner").value.trim(), name: $("repo-name").value.trim(),
+      token,
+      branch: $("repo-branch").value.trim() || null,
+    };
+    if (!repo.owner || !repo.name || !repo.token) { alert("Fill in the GitHub repo owner, name and PAT."); return; }
+  }
   if (!$("api-key").value) { alert("Fill in the DeepKimi API key."); return; }
   if (!$("prompt").value.trim()) { alert("Describe what the swarm should build."); return; }
   const budget = parseInt($("budget").value || "4000000", 10);
   const body = {
     prompt: $("prompt").value.trim(),
     token_budget: Number.isFinite(budget) ? budget : 4000000,
-    repo,
     agents: [
       { role: "planner", provider: "deepseek", model: "deepseek-v4-flash" },
       { role: "coder", provider: "kimi", model: "kimi-k3" },
@@ -136,12 +179,14 @@ async function start() {
       { role: "merger", provider: "kimi", model: "kimi-k3" },
     ],
   };
+  if (createRepo) body.create_repo = createRepo;
+  if (repo) body.repo = repo;
   $("start").disabled = true;
   try {
     const r = await api("/v1/build", "POST", body);
     currentBuild = r.build_id;
     $("status").classList.add("on");
-    $("build-id").textContent = "build " + currentBuild + (r.repo ? " → " + r.repo.owner + "/" + r.repo.name : "");
+    $("build-id").textContent = "build " + currentBuild + (r.repo_created ? " → 🆕 " + r.repo_created : (r.repo ? " → " + r.repo.owner + "/" + r.repo.name : ""));
     $("output").textContent = "swarm is working…";
     $("errors").textContent = "";
     $("steps").innerHTML = "";

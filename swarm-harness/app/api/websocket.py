@@ -13,7 +13,7 @@ TERMINAL_STATES = {BuildState.COMPLETED, BuildState.FAILED, BuildState.CANCELLED
 
 @router.websocket("/v1/build/{build_id}/stream")
 async def stream_build(websocket: WebSocket, build_id: str, api_key: str = ""):
-    if api_key != CONFIG.API_KEY:
+    if api_key not in CONFIG.API_KEYS:
         await websocket.close(code=4401)
         return
     await websocket.accept()

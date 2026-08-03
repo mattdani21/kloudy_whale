@@ -209,7 +209,7 @@ Then open **http://localhost:8000/** in a browser for the web UI.
 
 A lightweight single-page UI is served at the app root (`/`). No build step, no framework — plain HTML/JS.
 
-1. **GitHub target repo** — owner, repo name, a fine-grained **PAT** (Settings → Developer settings → Fine-grained tokens: *Contents: Read and write* on the target repo), optional branch (default branch if blank).
+1. **GitHub target** — pick **"Use an existing repo"** (owner, repo name, fine-grained **PAT** with *Contents: Read and write* on the repo, optional branch) or **"Create a new repo"** (name, visibility, description; the repo is created under your PAT's account with `auto_init`, then the build writes to it). PAT with `repo` scope is required for create mode.
 2. **Build** — the prompt, the DeepKimi `API_KEY` for this deployment, and an optional token budget. The default 4-agent lineup (planner/reviewer DeepSeek, coder/merger Kimi — Kimi falls back to DeepSeek without a key) is used.
 3. **Status** — live progress over WebSocket: state badge, token usage, steps done, human-gate prompts (answered inline), and the final output with the commit hash + files written.
 
@@ -226,7 +226,7 @@ All configuration is environment-driven (`app/config.py`).
 | `DEEPSEEK_API_KEY` | *(empty)* | API key for DeepSeek (`api.deepseek.com`) |
 | `KIMI_API_KEY` | *(empty)* | API key for Kimi/Moonshot (`api.moonshot.cn`). If unset, `kimi` agents automatically **fall back to DeepSeek** (`DEEPSEEK_FALLBACK_MODEL`) instead of failing |
 | `DEEPSEEK_FALLBACK_MODEL` | `deepseek-v4-flash` | Model used when a `kimi` agent runs without `KIMI_API_KEY`. Override for other tiers (e.g. an "ultra reasoning" model ID) |
-| `API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** |
+| `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |
 | `DEFAULT_TOKEN_BUDGET` | `4000000` | Default per-build token budget (up to 4M) |
@@ -259,10 +259,26 @@ All routes except `GET /v1/health` require the header `X-API-Key: <API_KEY>`.
 }
 ```
 
+Or create a brand-new repo first (mutually exclusive with `repo`):
+
+```json
+{
+  "prompt": "Build a FastAPI todo app with SQLite persistence",
+  "agents": [
+    {"role": "planner",  "provider": "deepseek", "model": "deepseek-chat"},
+    {"role": "coder",    "provider": "kimi",     "model": "kimi-k3"},
+    {"role": "reviewer", "provider": "deepseek", "model": "deepseek-chat"},
+    {"role": "merger",   "provider": "kimi",     "model": "kimi-k3"}
+  ],
+  "create_repo": {"name": "my-new-project", "token": "github_pat_...", "private": true, "description": "Built by DeepKimi"}
+}
+```
+
 - `agents` — **required**; each entry: `role` (`planner|coder|reviewer|tester|merger|tool`), `provider` (`deepseek|kimi`), `model`, plus optional `temperature`, `max_tokens`, `system_prompt`, `token_budget`.
 - `strategy` — `single` | `swarm` (default) | `debate`.
 - `slack_webhook` — optional; per-build Slack notifications.
 - `repo` — optional; `{owner, name, token, branch?}`. When set, the build writes its files to that GitHub repo (single commit) and verifies the result against it. The token is stored in the build record (7-day Redis TTL) and **never returned by any endpoint**.
+- `create_repo` — optional; `{name, token, private?, description?}`. Replaces `repo`: the platform creates a **new** repo under your PAT's account (private by default, `auto_init` so `main` exists), then runs the build against it exactly like `repo` mode. `name` must be 1-100 chars of letters/digits/`-`/`_`/`.` starting with a letter or digit. GitHub's own errors (e.g. name already taken, PAT scope) are surfaced as 4xx with the API message. **Requires a PAT with `repo` scope.**
 
 **Response:**
 
@@ -272,9 +288,13 @@ All routes except `GET /v1/health` require the header `X-API-Key: <API_KEY>`.
   "state": "queued",
   "status_url": "/v1/build/a1b2c3d4e5f6",
   "websocket_url": "/v1/build/a1b2c3d4e5f6/stream",
-  "estimated_duration": "120s"
+  "estimated_duration": "120s",
+  "repo": {"owner": "mattdani21", "name": "my-new-project", "branch": null},
+  "repo_created": "https://github.com/mattdani21/my-new-project"
 }
 ```
+
+`repo_created` is present only when the build created the repo; the build summary (`GET /v1/build/{id}`) also marks it with `"created": true`.
 
 ```bash
 curl -X POST http://localhost:8000/v1/build \

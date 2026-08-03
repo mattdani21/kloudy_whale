@@ -54,6 +54,21 @@ class GitHubRepoClient:
                 return None
             return await resp.json()
 
+    async def create_repo(self, name: str, private: bool = True, description: str = "") -> Dict:
+        """Create a repo under the authenticated user. Returns {owner, name, full_name, html_url}."""
+        data = await self._request("POST", "/user/repos", json={
+            "name": name,
+            "private": private,
+            "description": description or "",
+            "auto_init": True,  # default branch (main) exists from the start
+        })
+        return {
+            "owner": (data or {}).get("owner", {}).get("login", ""),
+            "name": (data or {}).get("name", ""),
+            "full_name": (data or {}).get("full_name", ""),
+            "html_url": (data or {}).get("html_url", ""),
+        }
+
     async def default_branch(self) -> str:
         data = await self._request("GET", f"/repos/{self.owner}/{self.repo}")
         return data.get("default_branch", "main")
