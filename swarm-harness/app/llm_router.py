@@ -11,7 +11,16 @@ logger = logging.getLogger(__name__)
 class LLMRouter:
     def __init__(self):
         self.session: aiohttp.ClientSession = None
-        self._lock = asyncio.Lock()
+        # Per-provider concurrency semaphores: parallel steps must actually run in
+        # parallel (a global lock serialized every LLM call — the swarm's biggest
+        # latency bug), but a small cap avoids tripping provider rate limits.
+        self._sems: Dict[str, asyncio.Semaphore] = {}
+
+    def _sem(self, provider: str) -> asyncio.Semaphore:
+        if provider not in self._sems:
+            limit = CONFIG.LLM_CONCURRENCY
+            self._sems[provider] = asyncio.Semaphore(limit) if limit > 0 else asyncio.Semaphore(10**6)
+        return self._sems[provider]
 
     async def __aenter__(self):
         # 600s total: long reasoning merges on big builds exceed 120s
@@ -57,7 +66,7 @@ class LLMRouter:
 
     async def _post_and_parse(self, url: str, api_key: str, payload: dict, provider: str) -> Tuple[str, int]:
         """POST to an OpenAI-compatible endpoint; surface HTTP errors with status + body."""
-        async with self._lock:
+        async with self._sem(provider):
             async with self.session.post(
                 url,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},

@@ -83,3 +83,56 @@ async def test_unknown_provider_raises(monkeypatch):
     monkeypatch.setattr(llm_router, "CONFIG", make_config(kimi_key=""))
     with pytest.raises(ValueError, match="Unknown provider"):
         await router.route([], "gpt", "gpt-4")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_calls_run_in_parallel(monkeypatch):
+    """Two simultaneous calls must overlap — a global lock would serialize them."""
+    import asyncio, time
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(llm_router, "CONFIG", SimpleNamespace(LLM_CONCURRENCY=4, DEEPSEEK_API_KEY="sk-test"))
+
+    class SlowResponse:
+        status = 200
+
+        async def json(self):
+            return {"choices": [{"message": {"content": "ok"}}], "usage": {"total_tokens": 3}}
+
+        async def text(self):
+            return ""
+
+    class SlowCtx:
+        """aiohttp-style async context manager wrapping the request lifetime."""
+        def __init__(self, session):
+            self._session = session
+
+        async def __aenter__(self):
+            await asyncio.sleep(0.25)  # simulated network latency
+            return SlowResponse()
+
+        async def __aexit__(self, *a):
+            self._session.active -= 1
+            return False
+
+    class SlowSession:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+
+        def post(self, url, headers=None, json=None):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            return SlowCtx(self)
+
+    router = LLMRouter()
+    router.session = SlowSession()
+    start = time.monotonic()
+    results = await asyncio.gather(*[
+        router.call_deepseek([{"role": "user", "content": "a"}], "deepseek-chat", 100)
+        for _ in range(2)
+    ])
+    elapsed = time.monotonic() - start
+    assert all(r[0] == "ok" for r in results)
+    assert router.session.max_active >= 2, "calls were serialized"
+    assert elapsed < 0.45, f"calls were serialized ({elapsed:.2f}s for two 0.25s calls)"

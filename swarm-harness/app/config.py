@@ -31,6 +31,9 @@ class Config:
     # DAILY_TOKEN_BUDGET caps total token usage across builds created in the last 24h.
     MAX_CONCURRENT_BUILDS: int = int(os.getenv("MAX_CONCURRENT_BUILDS", "0"))
     DAILY_TOKEN_BUDGET: int = int(os.getenv("DAILY_TOKEN_BUDGET", "0"))
+    # Max parallel LLM calls per provider (swarm steps run concurrently up to this).
+    # 0 = unlimited.
+    LLM_CONCURRENCY: int = int(os.getenv("LLM_CONCURRENCY", "4"))
     NOTIFICATION_WEBHOOK: str = os.getenv("NOTIFICATION_WEBHOOK", "")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     # Model used when a "kimi" agent runs without KIMI_API_KEY set.
