@@ -12,6 +12,7 @@ from app.persistence import RedisStore
 from app.notifications import NotificationDispatcher
 from app.state_machine import can_transition
 from app.github_client import GitHubRepoClient
+from app.agent_pool import unwrap_error
 
 HUMAN_INPUT_TAG = "[HUMAN_INPUT]"
 
@@ -134,7 +135,7 @@ class SwarmCoordinator:
                 results = await asyncio.gather(*step_futures, return_exceptions=True)
 
                 # Check for failures
-                failures = [r for r in results if isinstance(r, Exception)]
+                failures = [unwrap_error(r) for r in results if isinstance(r, Exception)]
                 if pending and len(failures) > len(pending) / 2:
                     build.error_log.append(f"Majority of swarm failed: {failures}")
                     await self._transition(build, BuildState.FAILED)
@@ -227,6 +228,7 @@ class SwarmCoordinator:
                 await self.notifier.notify(build, f"✅ Swarm complete! Tokens: {build.token_usage}", "normal")
 
             except Exception as e:
+                e = unwrap_error(e)
                 build.error_log.append(str(e))
                 if build.state not in (BuildState.FAILED, BuildState.CANCELLED):
                     await self._transition(build, BuildState.FAILED)
