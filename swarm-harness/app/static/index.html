@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DeepKimi — Swarm Agent Coding Platform</title>
+<title>Kloudy Whale — Swarm Agent Coding Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -74,6 +74,7 @@
   .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); white-space: nowrap; }
   .brand-name .grad { background: linear-gradient(90deg, var(--violet-hi), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .brand-sub { font-size: 12px; color: var(--text4); letter-spacing: 0.02em; white-space: nowrap; }
+  @media (max-width: 640px) { .brand-sub { display: none; } }
   .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
   .live-pill {
     display: inline-flex; align-items: center; gap: 7px;
@@ -281,20 +282,21 @@
 <header class="topbar">
   <div class="brand">
     <svg class="glyph" viewBox="0 0 30 30" aria-hidden="true">
-      <circle cx="15" cy="15" r="3.2" fill="#7170ff"/>
-      <circle cx="15" cy="15" r="7.5" fill="none" stroke="rgba(113,112,255,0.35)" stroke-width="1"/>
+      <path d="M6 16.8 C6 13 9.2 10.6 13.5 10.6 C17.6 10.6 20.9 12.7 22.7 15 C23.2 15.6 22.8 16.5 22.1 16.5 L18.9 16.3 C17.2 18.1 14.5 19.3 11.9 19.3 C9.4 19.3 7.3 18.3 6 16.8 Z" fill="#7170ff"/>
+      <path d="M18.9 16.3 L23 14.3 C23.4 14.1 23.7 14.6 23.4 15 L21.7 17.5 Z" fill="#22d3ee"/>
+      <circle cx="8.9" cy="14.5" r="0.9" fill="#0f1011"/>
       <g class="orbit">
-        <circle cx="15" cy="7.5" r="1.9" fill="#828fff"/>
-        <circle cx="22.5" cy="15" r="1.9" fill="#22d3ee"/>
+        <circle cx="13.5" cy="5" r="1.7" fill="#828fff"/>
+        <circle cx="24.5" cy="12" r="1.7" fill="#22d3ee"/>
       </g>
       <g class="orbit2">
-        <circle cx="15" cy="22.5" r="1.6" fill="rgba(255,255,255,0.45)"/>
-        <circle cx="7.5" cy="15" r="1.6" fill="rgba(34,211,238,0.75)"/>
+        <circle cx="13.5" cy="25" r="1.5" fill="rgba(255,255,255,0.5)"/>
+        <circle cx="2.5" cy="13.5" r="1.5" fill="rgba(130,143,255,0.85)"/>
       </g>
     </svg>
     <div>
-      <div class="brand-name">Deep<span class="grad">Kimi</span></div>
-      <div class="brand-sub">swarm · build · ship</div>
+      <div class="brand-name">Kloudy <span class="grad">Whale</span></div>
+      <div class="brand-sub">the blessing of the whale from the kloud</div>
     </div>
   </div>
   <div class="topbar-right">
@@ -335,7 +337,7 @@
             <option value="false">Public</option>
           </select>
         </div>
-        <div class="field"><label for="create-description">Description</label><input id="create-description" placeholder="Built by DeepKimi" autocomplete="off"></div>
+        <div class="field"><label for="create-description">Description</label><input id="create-description" placeholder="Built by Kloudy Whale" autocomplete="off"></div>
       </div>
     </div>
 
@@ -401,7 +403,7 @@
       </div>
       <div id="steps" class="steps"></div>
       <div class="out-head">Final output</div>
-      <pre id="output">The swarm is idle. Launch a build to get started.</pre>
+      <pre id="output">A whale drifts in the kloud. Launch a build and watch the swarm bring it to life.</pre>
       <details><summary>Errors / notes</summary><pre id="errors" class="err">…</pre></details>
     </div>
 
@@ -499,7 +501,7 @@ async function start() {
     };
     if (!repo.owner || !repo.name || !repo.token) { alert("Fill in the GitHub repo owner, name and PAT."); return; }
   }
-  if (!$("api-key").value) { alert("Fill in the DeepKimi API key."); return; }
+  if (!$("api-key").value) { alert("Fill in the Kloudy Whale API key."); return; }
   if (!$("prompt").value.trim()) { alert("Describe what the swarm should build."); return; }
   const budget = parseInt($("budget").value || "4000000", 10);
   const body = {
