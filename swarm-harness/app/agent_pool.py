@@ -26,10 +26,10 @@ class AgentPool:
         if build.token_usage >= build.token_budget_total:
             raise Exception("Token budget exhausted")
 
-        messages = [
-            {"role": "system", "content": agent.system_prompt},
-            {"role": "user", "content": step.prompt}
-        ]
+        messages = []
+        if agent.system_prompt:
+            messages.append({"role": "system", "content": agent.system_prompt})
+        messages.append({"role": "user", "content": step.prompt})
         start = datetime.utcnow()
         try:
             result, tokens = await self.router.route(messages, agent.provider.value, agent.model, agent.max_tokens)

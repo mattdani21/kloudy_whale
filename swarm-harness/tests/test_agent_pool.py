@@ -35,6 +35,46 @@ class _FakeRouter:
         raise self.exc
 
 
+class _RecordingRouter:
+    def __init__(self, result="ok"):
+        self.result = result
+        self.received = []
+
+    async def route(self, messages, provider, model, max_tokens=4000):
+        self.received.append(messages)
+        return (self.result, 5)
+
+
+@pytest.mark.asyncio
+async def test_execute_step_omits_empty_system_message():
+    """Moonshot rejects an empty 'system' message (DeepSeek tolerates it) — skip it."""
+    router = _RecordingRouter()
+    pool = AgentPool(router, _FakeStore())
+    build = SwarmBuild(id="b1", prompt="p", state=BuildState.EXECUTING, token_budget_total=1000)
+    step = Step(id="s1", agent_id="a", role=AgentRole.CODER, provider=ModelProvider.KIMI, prompt="write code")
+    agent = AgentConfig(role=AgentRole.CODER, provider=ModelProvider.KIMI, model="kimi-k3")  # no system_prompt
+
+    await pool.execute_step(build, step, agent)
+    assert router.received[0] == [{"role": "user", "content": "write code"}]
+    assert step.result == "ok"
+
+
+@pytest.mark.asyncio
+async def test_execute_step_keeps_nonempty_system_message():
+    router = _RecordingRouter()
+    pool = AgentPool(router, _FakeStore())
+    build = SwarmBuild(id="b1", prompt="p", state=BuildState.EXECUTING, token_budget_total=1000)
+    step = Step(id="s1", agent_id="a", role=AgentRole.CODER, provider=ModelProvider.KIMI, prompt="write code")
+    agent = AgentConfig(role=AgentRole.CODER, provider=ModelProvider.KIMI, model="kimi-k3",
+                        system_prompt="You are a careful coder.")
+
+    await pool.execute_step(build, step, agent)
+    assert router.received[0] == [
+        {"role": "system", "content": "You are a careful coder."},
+        {"role": "user", "content": "write code"},
+    ]
+
+
 @pytest.mark.asyncio
 async def test_execute_step_records_underlying_error():
     """step.error must carry the underlying provider message, not an opaque wrapper."""
