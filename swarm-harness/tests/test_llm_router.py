@@ -11,6 +11,7 @@ FALLBACK_MODEL = "deepseek-v4-flash-ultra-reasoning"
 def make_config(kimi_key: str):
     return SimpleNamespace(
         KIMI_API_KEY=kimi_key,
+        KIMI_API_BASE="https://api.moonshot.ai/v1",
         DEEPSEEK_API_KEY="sk-test",
         DEEPSEEK_FALLBACK_MODEL=FALLBACK_MODEL,
     )
@@ -64,7 +65,7 @@ async def test_deepseek_without_key_raises(monkeypatch):
     """A 'deepseek' agent without DEEPSEEK_API_KEY must raise a clear error."""
     router = LLMRouter()
     monkeypatch.setattr(
-        llm_router, "CONFIG", SimpleNamespace(KIMI_API_KEY="", DEEPSEEK_API_KEY="", DEEPSEEK_FALLBACK_MODEL=FALLBACK_MODEL)
+        llm_router, "CONFIG", SimpleNamespace(KIMI_API_KEY="", KIMI_API_BASE="https://api.moonshot.ai/v1", DEEPSEEK_API_KEY="", DEEPSEEK_FALLBACK_MODEL=FALLBACK_MODEL)
     )
 
     async def fail_deepseek(messages, model, max_tokens=4000):

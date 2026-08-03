@@ -111,7 +111,7 @@ At any point the plan or a step can request clarification. The build enters `wai
 | Provider | Endpoint | Default model |
 |---|---|---|
 | `deepseek` | `https://api.deepseek.com/v1/chat/completions` | `deepseek-v4-flash` |
-| `kimi` | `https://api.moonshot.cn/v1/chat/completions` | `kimi-k3` |
+| `kimi` | `https://api.moonshot.ai/v1/chat/completions` (or `KIMI_API_BASE`) | `kimi-k3` |
 
 > **Fallback:** if `KIMI_API_KEY` is not set, any `kimi` agent silently routes to DeepSeek using `DEEPSEEK_FALLBACK_MODEL` (a warning is logged per request). This means a DeepSeek-only deployment works out of the box with the default agent lineup — Kimi is used only when its key is configured.
 
@@ -226,7 +226,8 @@ All configuration is environment-driven (`app/config.py`).
 | Variable | Default | Description |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | *(empty)* | API key for DeepSeek (`api.deepseek.com`) |
-| `KIMI_API_KEY` | *(empty)* | API key for Kimi/Moonshot (`api.moonshot.cn`). If unset, `kimi` agents automatically **fall back to DeepSeek** (`DEEPSEEK_FALLBACK_MODEL`) instead of failing |
+| `KIMI_API_KEY` | *(empty)* | API key for Kimi/Moonshot. The router talks to `api.moonshot.ai` (international) by default; China-region keys need `KIMI_API_BASE=https://api.moonshot.cn/v1`. If unset, `kimi` agents automatically **fall back to DeepSeek** (`DEEPSEEK_FALLBACK_MODEL`) instead of failing |
+| `KIMI_API_BASE` | `https://api.moonshot.ai/v1` | Kimi/Moonshot OpenAI-compatible endpoint. Change to `https://api.moonshot.cn/v1` for China-region keys |
 | `DEEPSEEK_FALLBACK_MODEL` | `deepseek-v4-flash` | Model used when a `kimi` agent runs without `KIMI_API_KEY`. Override for other tiers (e.g. an "ultra reasoning" model ID) |
 | `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |

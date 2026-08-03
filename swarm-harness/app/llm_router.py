@@ -43,12 +43,13 @@ class LLMRouter:
         payload = {
             "model": model,
             "messages": messages,
-            "temperature": 0.7,
+            # Moonshot's kimi-k3 family only accepts temperature == 1 (rejects 0.7 with 400).
+            "temperature": 1,
             "max_tokens": max_tokens,
             "stream": False
         }
         return await self._post_and_parse(
-            "https://api.moonshot.cn/v1/chat/completions",
+            f"{CONFIG.KIMI_API_BASE.rstrip('/')}/chat/completions",
             CONFIG.KIMI_API_KEY,
             payload,
             "kimi",

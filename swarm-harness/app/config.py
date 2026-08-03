@@ -16,6 +16,9 @@ class Config:
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     KIMI_API_KEY: str = os.getenv("KIMI_API_KEY", "")
+    # Kimi/Moonshot API base. International keys work on api.moonshot.ai;
+    # China-region keys need KIMI_API_BASE=https://api.moonshot.cn/v1
+    KIMI_API_BASE: str = os.getenv("KIMI_API_BASE", "https://api.moonshot.ai/v1")
     # First accepted key (backward-compat for code that reads CONFIG.API_KEY).
     API_KEY: str = field(default_factory=lambda: _api_keys_tuple()[0])
     # All accepted keys (APP_API_KEY or API_KEY, comma-separated).
