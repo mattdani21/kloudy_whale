@@ -4,120 +4,414 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DeepKimi — Swarm Agent Coding Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
-          --accent:#2f81f7; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
-  .wrap { max-width:960px; margin:0 auto; padding:24px 16px 60px; }
-  h1 { font-size:22px; margin:0 0 4px; } h1 span { color:var(--muted); font-weight:400; }
-  p.sub { color:var(--muted); margin:0 0 20px; }
-  .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; }
-  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 12px; }
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  label { display:block; font-size:12px; color:var(--muted); margin:0 0 4px; }
-  input, textarea, select { width:100%; background:#0d1117; color:var(--text); border:1px solid var(--border);
-          border-radius:6px; padding:8px 10px; font:inherit; }
-  textarea { min-height:90px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-  .full { grid-column:1 / -1; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:10px 18px; font:inherit;
-           font-weight:600; cursor:pointer; } button:disabled { opacity:.5; cursor:default; }
-  #status { display:none; } #status.on { display:block; }
-  .badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; }
-  .st-queued,.st-planning,.st-executing { background:#1f6feb33; color:#79c0ff; }
-  .st-reviewing,.st-merging { background:#d2992233; color:#e3b341; }
-  .st-waiting_human { background:#d2992233; color:#e3b341; }
-  .st-completed { background:#3fb95033; color:#56d364; }
-  .st-failed,.st-cancelled { background:#f8514933; color:#ff7b72; }
-  .meta { color:var(--muted); font-size:13px; margin:6px 0; }
-  pre { background:#0d1117; border:1px solid var(--border); border-radius:6px; padding:12px; overflow:auto;
-        white-space:pre-wrap; word-break:break-word; max-height:480px; }
-  .steps { font-size:13px; } .steps div { padding:2px 0; border-bottom:1px dashed #21262d; }
-  .hint { color:var(--muted); font-size:12px; margin-top:6px; }
-  a { color:#79c0ff; }
-  .row { display:flex; gap:10px; align-items:center; } .row .grow { flex:1; }
-  #human { display:none; background:var(--panel); border:1px solid var(--warn); border-radius:8px; padding:14px; margin-bottom:16px; }
-  #human.on { display:block; }
-  .err { color:var(--err); }
-  details { margin-top:8px; } summary { cursor:pointer; color:var(--muted); }
+  :root {
+    --bg: #08090a;
+    --panel: #0f1011;
+    --surface: #191a1b;
+    --surface2: #28282c;
+    --text: #f7f8f8;
+    --text2: #d0d6e0;
+    --text3: #8a8f98;
+    --text4: #62666d;
+    --border: rgba(255,255,255,0.08);
+    --border-subtle: rgba(255,255,255,0.05);
+    --violet: #7170ff;
+    --violet-hi: #828fff;
+    --violet-dim: rgba(113,112,255,0.14);
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34,211,238,0.12);
+    --ok: #27a644;
+    --warn: #d29922;
+    --err: #f85149;
+    --radius: 8px;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.55 var(--sans);
+    font-feature-settings: 'cv01','ss03';
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  ::selection { background: var(--violet-dim); }
+  .mono { font-family: var(--mono); font-size: 12.5px; }
+
+  /* ---- ambient background ---- */
+  .aurora {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(900px 420px at 18% -8%, rgba(113,112,255,0.13), transparent 62%),
+      radial-gradient(760px 380px at 88% -10%, rgba(34,211,238,0.09), transparent 60%),
+      radial-gradient(1000px 500px at 55% 118%, rgba(113,112,255,0.06), transparent 60%);
+  }
+  .aurora::after {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, black 30%, transparent 78%);
+  }
+
+  /* ---- top bar ---- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 22px;
+    background: rgba(15,16,17,0.82);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); white-space: nowrap; }
+  .brand-name .grad { background: linear-gradient(90deg, var(--violet-hi), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand-sub { font-size: 12px; color: var(--text4); letter-spacing: 0.02em; white-space: nowrap; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .live-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 500; color: var(--text3);
+    border: 1px solid var(--border-subtle); border-radius: 999px;
+    padding: 4px 11px; background: rgba(255,255,255,0.02);
+  }
+  .live-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px rgba(39,166,68,0.8); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .gh-link { color: var(--text3); text-decoration: none; font-size: 12.5px; font-weight: 500; transition: color .15s; }
+  .gh-link:hover { color: var(--text); }
+
+  /* ---- layout ---- */
+  .layout {
+    max-width: 1240px; margin: 0 auto; padding: 26px 22px 80px;
+    display: grid; grid-template-columns: 384px minmax(0,1fr); gap: 18px; align-items: start;
+  }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: rgba(0,0,0,0.2) 0px 0px 0px 1px;
+    margin-bottom: 16px;
+  }
+  .panel-pad { padding: 18px; }
+
+  .section-title {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--text3); margin: 0 0 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title .stepno {
+    font-family: var(--mono); font-size: 10.5px; color: var(--text4);
+    border: 1px solid var(--border-subtle); border-radius: 4px; padding: 1px 5px;
+  }
+
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin: 0 0 5px; }
+  input, textarea, select {
+    width: 100%; background: rgba(255,255,255,0.02); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    font: inherit; font-feature-settings: 'cv01','ss03';
+    transition: border-color .15s, background .15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--violet);
+    box-shadow: 0 0 0 3px var(--violet-dim);
+  }
+  input::placeholder, textarea::placeholder { color: var(--text4); }
+  select { appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8f98' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; padding-right: 30px;
+  }
+  textarea { min-height: 120px; resize: vertical; font-family: var(--mono); font-size: 13px; line-height: 1.6; }
+  .field { margin-bottom: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hint { color: var(--text4); font-size: 12px; margin-top: 7px; line-height: 1.5; }
+  .hint b { color: var(--text3); font-weight: 500; }
+
+  /* ---- launch button ---- */
+  .launch {
+    position: relative; width: 100%;
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    background: linear-gradient(180deg, #6f6dff, #5a55e0);
+    color: #fff; border: 0; border-radius: 8px;
+    padding: 12px 18px; margin-top: 4px;
+    font: 600 14px var(--sans); letter-spacing: 0.01em;
+    cursor: pointer; overflow: hidden;
+    transition: filter .15s, transform .1s;
+  }
+  .launch::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.28) 50%, transparent 70%);
+    transform: translateX(-120%); transition: transform .6s ease;
+  }
+  .launch:hover { filter: brightness(1.08); }
+  .launch:hover::after { transform: translateX(120%); }
+  .launch:active { transform: translateY(1px); }
+  .launch:disabled { opacity: 0.55; cursor: default; filter: none; }
+  .launch:disabled::after { display: none; }
+  .launch .arrow { transition: transform .15s; }
+  .launch:hover .arrow { transform: translateX(3px); }
+
+  /* ---- pipeline ---- */
+  .pipeline { display: flex; align-items: center; padding: 4px 2px 2px; }
+  .stage {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12.5px; font-weight: 500; color: var(--text4);
+    padding: 7px 11px; border-radius: 7px; border: 1px solid transparent;
+    white-space: nowrap; transition: color .25s, border-color .25s, background .25s;
+  }
+  .stage .sdot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.55; }
+  .stage.active { color: var(--text); background: var(--violet-dim); border-color: rgba(113,112,255,0.35); }
+  .stage.active .sdot { opacity: 1; box-shadow: 0 0 10px var(--violet); animation: pulse 1.6s ease-in-out infinite; }
+  .stage.done { color: var(--text3); }
+  .stage.done .sdot { background: var(--ok); opacity: 1; box-shadow: 0 0 8px rgba(39,166,68,0.7); }
+  .stage.fail { color: var(--err); border-color: rgba(248,81,73,0.4); background: rgba(248,81,73,0.08); }
+  .stage.fail .sdot { background: var(--err); opacity: 1; }
+  .stage.human { color: var(--warn); border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.08); }
+  .stage.human .sdot { background: var(--warn); opacity: 1; }
+  .conn { flex: 1; height: 1.5px; margin: 0 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+  .conn::after { content: ""; display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--violet), var(--cyan)); transform: scaleX(0); transform-origin: left; transition: transform .4s ease; }
+  .conn.on::after { transform: scaleX(1); }
+
+  /* ---- status head ---- */
+  .status-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 3px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid transparent;
+  }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .st-queued, .st-planning, .st-executing { color: #9aa7ff; background: rgba(113,112,255,0.1); border-color: rgba(113,112,255,0.3); }
+  .st-queued::before, .st-planning::before, .st-executing::before { animation: pulse 1.6s ease-in-out infinite; }
+  .st-reviewing, .st-merging { color: #67c8dd; background: rgba(34,211,238,0.09); border-color: rgba(34,211,238,0.28); }
+  .st-waiting_human { color: var(--warn); background: rgba(210,153,34,0.1); border-color: rgba(210,153,34,0.32); }
+  .st-completed { color: #56d364; background: rgba(39,166,68,0.12); border-color: rgba(39,166,68,0.35); }
+  .st-failed, .st-cancelled { color: #ff7b72; background: rgba(248,81,73,0.1); border-color: rgba(248,81,73,0.32); }
+
+  .meta-row { display: flex; gap: 16px; flex-wrap: wrap; color: var(--text3); font-size: 12.5px; margin: 9px 0 2px; font-family: var(--mono); }
+  .meta-row .grow { flex: 1; }
+
+  /* ---- steps ---- */
+  .steps { margin-top: 10px; border-top: 1px solid var(--border-subtle); }
+  .step-row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 2px; border-bottom: 1px solid var(--border-subtle);
+    font-size: 13px;
+  }
+  .step-role { font-weight: 500; color: var(--text2); min-width: 74px; }
+  .p-badge {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+    padding: 2px 8px; border-radius: 5px; letter-spacing: 0.04em;
+  }
+  .p-deepseek { color: #a5b0ff; background: var(--violet-dim); }
+  .p-kimi { color: #67e3f9; background: var(--cyan-dim); }
+  .p-other { color: var(--text3); background: rgba(255,255,255,0.05); }
+  .step-status { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--text4); white-space: nowrap; }
+  .step-status.running { color: var(--violet-hi); }
+  .step-status.running::before { content: "●"; animation: pulse 1.4s ease-in-out infinite; margin-right: 6px; }
+  .step-status.done { color: var(--ok); }
+  .step-status.err { color: var(--err); }
+  .step-error { color: var(--err); font-size: 12px; font-family: var(--mono); word-break: break-word; margin-top: 2px; }
+
+  /* ---- output ---- */
+  .out-head {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--text4); margin: 16px 0 8px;
+  }
+  pre {
+    background: #0c0d0e; border: 1px solid var(--border-subtle); border-radius: 8px;
+    padding: 13px 14px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    font: 12.5px/1.65 var(--mono); color: var(--text2);
+    max-height: 400px; margin: 0;
+  }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--text4); font-size: 12.5px; font-weight: 500; user-select: none; }
+  summary:hover { color: var(--text3); }
+  pre.err { color: #ff9d96; border-color: rgba(248,81,73,0.25); }
+
+  /* ---- human gate ---- */
+  #human { display: none; border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.05); }
+  #human.on { display: block; }
+  .gate-title { color: var(--warn); font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .gate-q { color: var(--text2); font-size: 13.5px; margin: 4px 0 12px; }
+  .gate-row { display: flex; gap: 9px; }
+  .gate-row input { flex: 1; }
+  .gate-row button {
+    background: rgba(210,153,34,0.16); color: #e3b341;
+    border: 1px solid rgba(210,153,34,0.4); border-radius: 6px;
+    padding: 9px 16px; font: 600 13px var(--sans); cursor: pointer; white-space: nowrap;
+    transition: background .15s;
+  }
+  .gate-row button:hover { background: rgba(210,153,34,0.26); }
+
+  /* ---- history ---- */
+  .hist-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 10px; border-radius: 8px; cursor: pointer;
+    border: 1px solid transparent;
+    transition: background .12s, border-color .12s;
+  }
+  .hist-row:hover { background: rgba(255,255,255,0.03); border-color: var(--border-subtle); }
+  .hist-row .prompt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); font-size: 13px; }
+  .hist-row .repo { color: var(--text4); font-size: 12px; font-family: var(--mono); }
+  .hist-row .st-mini { font-family: var(--mono); font-size: 11px; color: var(--text4); }
+  .hist-empty { color: var(--text4); font-size: 13px; padding: 6px 2px; }
+
+  /* ---- swarm glyph ---- */
+  .glyph { width: 30px; height: 30px; flex-shrink: 0; }
+  .glyph .orbit { transform-origin: 15px 15px; animation: spin 14s linear infinite; }
+  .glyph .orbit2 { transform-origin: 15px 15px; animation: spin 20s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .glyph .orbit, .glyph .orbit2, .live-pill .dot, .stage.active .sdot { animation: none; }
+    .launch::after { display: none; }
+    .launch:hover .arrow { transform: none; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>DeepKimi <span>— swarm agent coding platform</span></h1>
-  <p class="sub">Plan → code → review → merge, with a swarm of DeepSeek + Kimi agents. Output lands as a commit in your GitHub repo.</p>
+<div class="aurora" aria-hidden="true"></div>
 
-  <div id="human">
-    <strong>🛑 The swarm needs your input:</strong>
-    <div id="human-q" class="meta"></div>
-    <div class="row"><input id="human-a" placeholder="Your answer…" class="grow">
-    <button id="human-send">Send</button></div>
+<header class="topbar">
+  <div class="brand">
+    <svg class="glyph" viewBox="0 0 30 30" aria-hidden="true">
+      <circle cx="15" cy="15" r="3.2" fill="#7170ff"/>
+      <circle cx="15" cy="15" r="7.5" fill="none" stroke="rgba(113,112,255,0.35)" stroke-width="1"/>
+      <g class="orbit">
+        <circle cx="15" cy="7.5" r="1.9" fill="#828fff"/>
+        <circle cx="22.5" cy="15" r="1.9" fill="#22d3ee"/>
+      </g>
+      <g class="orbit2">
+        <circle cx="15" cy="22.5" r="1.6" fill="rgba(255,255,255,0.45)"/>
+        <circle cx="7.5" cy="15" r="1.6" fill="rgba(34,211,238,0.75)"/>
+      </g>
+    </svg>
+    <div>
+      <div class="brand-name">Deep<span class="grad">Kimi</span></div>
+      <div class="brand-sub">swarm · build · ship</div>
+    </div>
   </div>
+  <div class="topbar-right">
+    <span class="live-pill"><span class="dot"></span>platform live</span>
+    <a class="gh-link" href="https://github.com/mattdani21/kloudy_whale" target="_blank" rel="noopener">kloudy_whale ↗</a>
+  </div>
+</header>
 
-  <div class="panel">
-    <h2>1 · GitHub target</h2>
-    <div class="grid">
-      <div class="full">
-        <label>Repo mode</label>
-        <select id="repo-mode">
-          <option value="existing">Use an existing repo</option>
-          <option value="create">Create a new repo</option>
-        </select>
+<main class="layout">
+
+  <!-- ============ composer ============ -->
+  <section class="panel panel-pad" aria-label="New build">
+    <h2 class="section-title"><span class="stepno">01</span> New build</h2>
+
+    <div class="field">
+      <label for="repo-mode">Target</label>
+      <select id="repo-mode">
+        <option value="existing">Use an existing repo</option>
+        <option value="create">Create a new repo</option>
+      </select>
+    </div>
+
+    <div id="existing-fields">
+      <div class="grid2">
+        <div class="field"><label for="repo-owner">Owner</label><input id="repo-owner" placeholder="mattdani21" autocomplete="off"></div>
+        <div class="field"><label for="repo-name">Repo</label><input id="repo-name" placeholder="my-project" autocomplete="off"></div>
       </div>
-      <div id="existing-fields">
-        <div class="grid">
-          <div><label>Owner / organization</label><input id="repo-owner" placeholder="mattdani21"></div>
-          <div><label>Repo name</label><input id="repo-name" placeholder="my-project"></div>
-          <div><label>Branch (optional, default)</label><input id="repo-branch" placeholder="main"></div>
+      <div class="field"><label for="repo-branch">Branch <span style="color:var(--text4);font-weight:400">(optional, default)</span></label><input id="repo-branch" placeholder="main" autocomplete="off"></div>
+    </div>
+
+    <div id="create-fields">
+      <div class="field"><label for="create-name">Repo name</label><input id="create-name" placeholder="my-new-project" autocomplete="off"></div>
+      <div class="grid2">
+        <div class="field">
+          <label for="create-visibility">Visibility</label>
+          <select id="create-visibility">
+            <option value="true">Private</option>
+            <option value="false">Public</option>
+          </select>
         </div>
+        <div class="field"><label for="create-description">Description</label><input id="create-description" placeholder="Built by DeepKimi" autocomplete="off"></div>
       </div>
-      <div id="create-fields">
-        <div class="grid">
-          <div><label>New repo name</label><input id="create-name" placeholder="my-new-project"></div>
-          <div><label>Visibility</label>
-            <select id="create-visibility">
-              <option value="true">Private</option>
-              <option value="false">Public</option>
-            </select>
-          </div>
-          <div class="full"><label>Description (optional)</label><input id="create-description" placeholder="Built by DeepKimi"></div>
-        </div>
+    </div>
+
+    <div class="field">
+      <label for="repo-token">Personal access token</label>
+      <input id="repo-token" type="password" placeholder="github_pat_…" autocomplete="off">
+      <div class="hint">Fine-grained PAT · <b>Contents: read/write</b> (existing) or <b>repo</b> scope (create). Stored only in this browser + the build record (7-day TTL). Never returned by any endpoint.</div>
+    </div>
+
+    <div class="field">
+      <label for="prompt">What should the swarm build?</label>
+      <textarea id="prompt" placeholder="e.g. Build a Flask TODO app with SQLite: app.py, templates, requirements.txt, README."></textarea>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label for="api-key">API key</label>
+        <input id="api-key" type="password" placeholder="X-API-Key" autocomplete="off">
       </div>
-      <div class="full"><label>Personal access token (PAT)</label><input id="repo-token" type="password" placeholder="github_pat_…"></div>
-      <div class="full hint">Fine-grained PAT with <b>Contents: Read and write</b> on the target repo (existing mode) or <b>repo</b> scope (create mode — the repo is created under your PAT's account). Stored only in this browser (localStorage) and in the build record for 7 days. The agent reads and writes this repo and verifies its work against it.</div>
+      <div class="field">
+        <label for="budget">Token budget</label>
+        <input id="budget" placeholder="4000000" autocomplete="off">
+      </div>
     </div>
-  </div>
 
-  <div class="panel">
-    <h2>2 · Build</h2>
-    <div class="grid">
-      <div class="full"><label>What should the swarm build?</label>
-        <textarea id="prompt" placeholder="e.g. Build a Flask TODO app with SQLite: app.py, templates, requirements.txt, README."></textarea></div>
-      <div><label>DeepKimi API key (from your deploy env)</label><input id="api-key" type="password" placeholder="X-API-Key"></div>
-      <div><label>Token budget (optional, default 4,000,000)</label><input id="budget" placeholder="4000000"></div>
-      <div class="full"><button id="start">🚀 Kick off build</button></div>
+    <button class="launch" id="start">Launch build <span class="arrow">→</span></button>
+  </section>
+
+  <!-- ============ monitor ============ -->
+  <section aria-label="Build monitor">
+
+    <div class="panel panel-pad">
+      <div class="pipeline" id="pipeline" aria-label="Build pipeline">
+        <span class="stage" data-stage="plan"><span class="sdot"></span>Plan</span>
+        <span class="conn"></span>
+        <span class="stage" data-stage="code"><span class="sdot"></span>Code</span>
+        <span class="conn"></span>
+        <span class="stage" data-stage="review"><span class="sdot"></span>Review</span>
+        <span class="conn"></span>
+        <span class="stage" data-stage="merge"><span class="sdot"></span>Merge</span>
+        <span class="conn"></span>
+        <span class="stage" data-stage="ship"><span class="sdot"></span>Ship</span>
+      </div>
     </div>
-  </div>
 
-  <div class="panel" id="status">
-    <h2>3 · Build status</h2>
-    <div class="row">
-      <span class="badge" id="state-badge">queued</span>
-      <span class="meta grow" id="build-id"></span>
+    <div class="panel panel-pad" id="human">
+      <div class="gate-title">The swarm needs your input</div>
+      <div class="gate-q" id="human-q">…</div>
+      <div class="gate-row">
+        <input id="human-a" placeholder="Your answer…" autocomplete="off">
+        <button id="human-send">Send</button>
+      </div>
     </div>
-    <div class="meta" id="tokens"></div>
-    <div class="meta" id="repo-info"></div>
-    <div id="steps" class="steps"></div>
-    <h2 style="margin-top:14px">Final output</h2>
-    <pre id="output">…</pre>
-    <details><summary>Errors / notes</summary><pre id="errors" class="err">…</pre></details>
-  </div>
 
-  <div class="panel" id="history">
-    <h2>Recent builds</h2>
-    <div id="history-list" class="steps"></div>
-  </div>
-</div>
+    <div class="panel panel-pad" id="status">
+      <div class="status-head">
+        <span class="badge" id="state-badge">queued</span>
+        <span class="mono" id="build-id" style="color:var(--text3)"></span>
+      </div>
+      <div class="meta-row">
+        <span id="tokens">tokens: 0</span>
+        <span class="grow" id="repo-info"></span>
+      </div>
+      <div id="steps" class="steps"></div>
+      <div class="out-head">Final output</div>
+      <pre id="output">The swarm is idle. Launch a build to get started.</pre>
+      <details><summary>Errors / notes</summary><pre id="errors" class="err">…</pre></details>
+    </div>
+
+    <div class="panel panel-pad" id="history">
+      <h2 class="section-title"><span class="stepno">02</span> Recent builds</h2>
+      <div id="history-list"></div>
+    </div>
+
+  </section>
+</main>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -138,6 +432,40 @@ let currentBuild = null;
 function setState(s) {
   $("state-badge").className = "badge st-" + s;
   $("state-badge").textContent = s.replace(/_/g, " ");
+}
+
+const STAGE_ORDER = ["plan","code","review","merge","ship"];
+const STAGE_OF = { queued: null, planning: "plan", executing: "code", reviewing: "review",
+                   merging: "merge", completed: "ship" };
+
+let currentStageIdx = -1;  // remembered so waiting_human/failed pause at the right stage
+
+function setPipeline(state) {
+  const stages = document.querySelectorAll("#pipeline .stage");
+  const conns = document.querySelectorAll("#pipeline .conn");
+  let activeIdx = -1;
+  const mapped = STAGE_OF[state];
+  if (mapped) activeIdx = STAGE_ORDER.indexOf(mapped);
+  if (activeIdx >= 0) currentStageIdx = activeIdx;
+  if (state === "queued") currentStageIdx = -1;
+  if (state === "waiting_human" || state === "failed" || state === "cancelled") activeIdx = currentStageIdx;
+  if (state === "completed") activeIdx = STAGE_ORDER.length;
+  stages.forEach((el, i) => {
+    el.classList.remove("active","done","fail","human");
+    if (state === "completed") el.classList.add("done");
+    else if (state === "failed" || state === "cancelled") {
+      if (i < activeIdx) el.classList.add("done");
+      else if (i === activeIdx) el.classList.add("fail");
+    } else if (state === "waiting_human") {
+      if (i < activeIdx) el.classList.add("done");
+      else if (i === activeIdx) el.classList.add("human");
+    } else if (i < activeIdx) el.classList.add("done");
+    else if (i === activeIdx) el.classList.add("active");
+  });
+  conns.forEach((c, i) => {
+    const before = stages[i];
+    c.classList.toggle("on", before.classList.contains("done") || before.classList.contains("active") || before.classList.contains("fail") || before.classList.contains("human"));
+  });
 }
 
 async function api(path, method, body) {
@@ -192,12 +520,13 @@ async function start() {
     currentBuild = r.build_id;
     wsRetry = 0;
     lastState = "queued";
-    $("status").classList.add("on");
+    $("status").classList.remove("hidden");
     $("build-id").textContent = "build " + currentBuild + (r.repo_created ? " → 🆕 " + r.repo_created : (r.repo ? " → " + r.repo.owner + "/" + r.repo.name : ""));
     $("output").textContent = "swarm is working…";
     $("errors").textContent = "";
     $("steps").innerHTML = "";
     setState("queued");
+    setPipeline("queued");
     connectWS(currentBuild);
   } catch (e) { alert("Submit failed: " + e.message); $("start").disabled = false; }
 }
@@ -241,9 +570,10 @@ function showGate(question) {
 
 function render(d) {
   setState(d.state);
+  setPipeline(d.state);
   $("tokens").textContent = "tokens: " + (d.token_usage || 0) + (d.budget_total ? " / " + d.budget_total : "");
   $("steps").innerHTML = (d.steps_done !== undefined)
-    ? "<div>steps: " + d.steps_done + " / " + d.steps_total + "</div>" : "";
+    ? "<div class='step-row'><span class='step-role'>agents</span><span style='color:var(--text3)'>" + d.steps_done + " / " + d.steps_total + " steps complete</span></div>" : "";
   if (d.needs_human) showGate(d.human_question);
   if (d.final_output) $("output").textContent = d.final_output;
 }
@@ -252,14 +582,28 @@ function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+function providerBadge(p) {
+  const cls = p === "deepseek" ? "p-deepseek" : p === "kimi" ? "p-kimi" : "p-other";
+  return "<span class='p-badge " + cls + "'>" + escapeHtml(p) + "</span>";
+}
+
 async function renderSummary(d) {
   setState(d.state);
+  setPipeline(d.state);
   lastState = d.state;
   $("tokens").textContent = "tokens: " + (d.token_usage || 0) + (d.budget_total ? " / " + d.budget_total : "");
-  $("steps").innerHTML = (d.steps || []).map(s =>
-    "<div>" + escapeHtml(s.role) + ": " + escapeHtml(s.status) +
-    (s.error ? " — <span class='err'>" + escapeHtml(s.error) + "</span>" : "") + "</div>").join("");
-  if (d.repo) $("repo-info").textContent = "repo: " + d.repo.owner + "/" + d.repo.name +
+  $("steps").innerHTML = (d.steps || []).map(s => {
+    const status = s.error ? "err" : (s.status === "done" ? "done" : "running");
+    const statusTxt = s.error ? "error" : (s.status === "done" ? (s.tokens ? s.tokens + " tok" : "done") : "working…");
+    return "<div class='step-row'>" +
+      "<span class='step-role'>" + escapeHtml(s.role) + "</span>" +
+      providerBadge(s.provider) +
+      (s.status === "done" && s.tokens ? "<span class='mono' style='color:var(--text4);font-size:11.5px'>" + s.tokens + " tok</span>" : "") +
+      "<span class='step-status " + status + "'>" + statusTxt + "</span>" +
+      (s.error ? "<div class='step-error'>" + escapeHtml(s.error) + "</div>" : "") +
+      "</div>";
+  }).join("") || "<div class='hist-empty'>no steps recorded</div>";
+  if (d.repo) $("repo-info").textContent = "repo " + d.repo.owner + "/" + d.repo.name +
     (d.repo.created ? " 🆕" : "") + (d.commit_sha ? " · " + d.commit_sha.slice(0, 10) : "");
   $("errors").textContent = (d.errors || []).join("\n");
   if (d.needs_human) showGate(d.human_question);
@@ -272,11 +616,12 @@ async function loadHistory() {
     const list = $("history-list");
     const builds = r.builds || [];
     list.innerHTML = builds.length ? builds.map(b =>
-      `<div class="row" style="cursor:pointer" data-id="${escapeHtml(b.id)}">
+      `<div class="hist-row" data-id="${escapeHtml(b.id)}">
          <span class="badge st-${escapeHtml(b.state)}">${escapeHtml(b.state)}</span>
-         <span class="grow">${escapeHtml((b.prompt || "").slice(0, 70))}</span>
-         <span class="meta">${escapeHtml((b.repo && (b.repo.owner + "/" + b.repo.name)) || "")}</span>
-       </div>`).join("") : "<div class='meta'>no builds yet</div>";
+         <span class="prompt">${escapeHtml((b.prompt || "").slice(0, 70))}</span>
+         <span class="repo">${escapeHtml((b.repo && (b.repo.owner + "/" + b.repo.name)) || "")}</span>
+         <span class="st-mini">${escapeHtml(b.id)}</span>
+       </div>`).join("") : "<div class='hist-empty'>no builds yet — launch your first</div>";
     list.querySelectorAll("[data-id]").forEach(el => el.onclick = () => openBuild(el.dataset.id));
   } catch (e) { /* history is best-effort — needs the API key to be set */ }
 }
@@ -284,7 +629,7 @@ async function loadHistory() {
 async function openBuild(buildId) {
   currentBuild = buildId;
   wsRetry = 0;
-  $("status").classList.add("on");
+  $("status").classList.remove("hidden");
   $("build-id").textContent = "build " + buildId;
   $("output").textContent = "…";
   $("errors").textContent = "";
