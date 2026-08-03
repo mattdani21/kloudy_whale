@@ -2,7 +2,7 @@ import asyncio
 import pytest
 
 from app.models import AgentConfig, AgentRole, BuildState, ModelProvider, SwarmBuild
-from app.swarm_coordinator import SwarmCoordinator
+from app.swarm_coordinator import SwarmCoordinator, _gate_question, HUMAN_INPUT_TAG, REPO_MANIFEST_INSTRUCTION
 
 class FakeRouter:
     """Canned LLM responses keyed off the prompt content."""
@@ -174,3 +174,12 @@ async def test_invalid_transition_raises():
     build.state = BuildState.COMPLETED
     with pytest.raises(ValueError):
         await c._transition(build, BuildState.PLANNING)
+
+
+def test_gate_question_strips_tag_and_manifest_boilerplate():
+    prompt = f"{HUMAN_INPUT_TAG} Confirm the target stack: React or Vue?\n\n{REPO_MANIFEST_INSTRUCTION}"
+    assert _gate_question(prompt) == "Confirm the target stack: React or Vue?"
+
+
+def test_gate_question_plain_prompt_unchanged():
+    assert _gate_question(f"{HUMAN_INPUT_TAG} Which database?") == "Which database?"

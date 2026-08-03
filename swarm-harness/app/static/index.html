@@ -74,7 +74,8 @@
   .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); white-space: nowrap; }
   .brand-name .grad { background: linear-gradient(90deg, var(--violet-hi), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .brand-sub { font-size: 12px; color: var(--text4); letter-spacing: 0.02em; white-space: nowrap; }
-  @media (max-width: 640px) { .brand-sub { display: none; } }
+  @media (max-width: 640px) { .brand-sub { display: none; } .gh-link { display: none; } .topbar { padding: 10px 14px; } }
+  .glyph { overflow: visible; }
   .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
   .live-pill {
     display: inline-flex; align-items: center; gap: 7px;
@@ -236,20 +237,63 @@
   summary:hover { color: var(--text3); }
   pre.err { color: #ff9d96; border-color: rgba(248,81,73,0.25); }
 
-  /* ---- human gate ---- */
-  #human { display: none; border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.05); }
-  #human.on { display: block; }
-  .gate-title { color: var(--warn); font-size: 13px; font-weight: 600; margin-bottom: 3px; }
-  .gate-q { color: var(--text2); font-size: 13.5px; margin: 4px 0 12px; }
-  .gate-row { display: flex; gap: 9px; }
-  .gate-row input { flex: 1; }
-  .gate-row button {
-    background: rgba(210,153,34,0.16); color: #e3b341;
-    border: 1px solid rgba(210,153,34,0.4); border-radius: 6px;
-    padding: 9px 16px; font: 600 13px var(--sans); cursor: pointer; white-space: nowrap;
-    transition: background .15s;
+  /* ---- human gate (Hermes-style chat card) ---- */
+  #human {
+    display: none;
+    position: fixed; right: 22px; bottom: 22px; z-index: 40;
+    width: 396px; max-width: calc(100vw - 28px);
+    background: rgba(15,16,17,0.94);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 14px 44px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.35);
+    padding: 14px;
   }
-  .gate-row button:hover { background: rgba(210,153,34,0.26); }
+  #human.on { display: block; animation: gateIn .22s ease; }
+  @keyframes gateIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @media (max-width: 640px) { #human { right: 12px; left: 12px; bottom: 12px; width: auto; } }
+  .gate-thread { display: flex; gap: 10px; align-items: flex-start; }
+  .gate-avatar {
+    flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+    background: var(--violet-dim); border: 1px solid rgba(113,112,255,0.35);
+    display: grid; place-items: center; color: var(--violet-hi);
+  }
+  .gate-avatar svg { width: 17px; height: 17px; }
+  .gate-bubble { flex: 1; min-width: 0; }
+  .gate-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .gate-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .gate-wait {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--warn); background: rgba(210,153,34,0.1);
+    border: 1px solid rgba(210,153,34,0.3); border-radius: 999px; padding: 2px 8px;
+  }
+  .gate-wait .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); animation: pulse 1.6s ease-in-out infinite; }
+  .gate-q { color: var(--text2); font-size: 13.5px; line-height: 1.55; margin: 0 0 11px; white-space: pre-wrap; }
+  .gate-composer {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 4px 4px 16px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .gate-composer:focus-within { border-color: var(--violet); box-shadow: 0 0 0 3px var(--violet-dim); }
+  .gate-composer input {
+    flex: 1; min-width: 0; border: 0; background: transparent; padding: 7px 0;
+    font: inherit; color: var(--text);
+  }
+  .gate-composer input:focus { outline: none; box-shadow: none; border: 0; }
+  .gate-composer input::placeholder { color: var(--text4); }
+  #human-send {
+    flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(180deg, #6f6dff, #5a55e0);
+    border: 0; color: #fff; cursor: pointer;
+    display: grid; place-items: center;
+    transition: filter .15s, opacity .15s;
+  }
+  #human-send:hover { filter: brightness(1.12); }
+  #human-send:disabled { opacity: 0.4; cursor: default; }
+  #human-send svg { width: 15px; height: 15px; }
 
   /* ---- history ---- */
   .hist-row {
@@ -383,12 +427,27 @@
       </div>
     </div>
 
-    <div class="panel panel-pad" id="human">
-      <div class="gate-title">The swarm needs your input</div>
-      <div class="gate-q" id="human-q">…</div>
-      <div class="gate-row">
-        <input id="human-a" placeholder="Your answer…" autocomplete="off">
-        <button id="human-send">Send</button>
+    <div class="panel panel-pad" id="human" role="dialog" aria-label="Swarm needs input">
+      <div class="gate-thread">
+        <div class="gate-avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M3.5 12.6 C3.5 9.6 5.9 7.8 9.3 7.8 C12.4 7.8 15 9.4 16.4 11.1 C16.8 11.6 16.5 12.3 15.9 12.3 L13.5 12.2 C12.3 13.5 10.5 14.3 8.8 14.3 C7 14.3 5.5 13.6 3.5 12.6 Z" fill="currentColor"/>
+            <path d="M13.5 12.2 L16.9 10.8 C17.2 10.7 17.4 11 17.2 11.3 L15.9 13.1 Z" fill="currentColor" opacity="0.85"/>
+          </svg>
+        </div>
+        <div class="gate-bubble">
+          <div class="gate-head">
+            <span class="gate-name">Kloudy Whale</span>
+            <span class="gate-wait"><span class="dot"></span>needs input</span>
+          </div>
+          <div class="gate-q" id="human-q">…</div>
+          <div class="gate-composer">
+            <input id="human-a" placeholder="Type your answer…" autocomplete="off" aria-label="Your answer">
+            <button id="human-send" aria-label="Send answer" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -562,12 +621,20 @@ function connectWS(buildId) {
 function showGate(question) {
   $("human").classList.add("on");
   $("human-q").textContent = question ? question.question : "…";
-  $("human-a").focus();
-  $("human-send").onclick = async () => {
-    try { await api("/v1/build/" + currentBuild + "/respond", "POST", { response: $("human-a").value });
-          $("human").classList.remove("on"); $("human-a").value = ""; }
-    catch (e) { alert("Respond failed: " + e.message); }
+  const input = $("human-a"), sendBtn = $("human-send");
+  input.value = "";
+  sendBtn.disabled = true;
+  input.oninput = () => { sendBtn.disabled = !input.value.trim(); };
+  const doSend = async () => {
+    if (!input.value.trim() || sendBtn.disabled) return;
+    try {
+      await api("/v1/build/" + currentBuild + "/respond", "POST", { response: input.value.trim() });
+      $("human").classList.remove("on");
+    } catch (e) { alert("Respond failed: " + e.message); }
   };
+  sendBtn.onclick = doSend;
+  input.onkeydown = ev => { if (ev.key === "Enter") doSend(); };
+  input.focus();
 }
 
 function render(d) {
@@ -575,7 +642,7 @@ function render(d) {
   setPipeline(d.state);
   $("tokens").textContent = "tokens: " + (d.token_usage || 0) + (d.budget_total ? " / " + d.budget_total : "");
   $("steps").innerHTML = (d.steps_done !== undefined)
-    ? "<div class='step-row'><span class='step-role'>agents</span><span style='color:var(--text3)'>" + d.steps_done + " / " + d.steps_total + " steps complete</span></div>" : "";
+    ? "<div style='color:var(--text4);font-family:var(--mono);font-size:12px;padding:9px 2px 3px'>" + d.steps_done + " / " + d.steps_total + " steps complete</div>" : "";
   if (d.needs_human) showGate(d.human_question);
   if (d.final_output) $("output").textContent = d.final_output;
 }

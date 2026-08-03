@@ -42,6 +42,12 @@ def _parse_file_manifest(text: str):
             files[str(item["path"]).lstrip("/")] = str(item["content"])
     return files or None
 
+
+def _gate_question(prompt: str) -> str:
+    """Human-gate question, cleaned for display: no tag, no repo-manifest boilerplate."""
+    q = prompt.replace(HUMAN_INPUT_TAG, "").strip()
+    return q.replace(REPO_MANIFEST_INSTRUCTION, "").strip()
+
 class SwarmCoordinator:
     def __init__(self):
         self.store = RedisStore()
@@ -119,7 +125,7 @@ class SwarmCoordinator:
                 # Human gate: pause if a step asks for input
                 gate = next((s for s in build.steps if s.prompt.startswith(HUMAN_INPUT_TAG) and not s.result), None)
                 if gate:
-                    question = gate.prompt.replace(HUMAN_INPUT_TAG, "").strip()
+                    question = _gate_question(gate.prompt)
                     build.human_input_queue.append({"step_id": gate.id, "question": question})
                     await self._transition(build, BuildState.WAITING_HUMAN)
                     await self.notifier.notify(build, f"🛑 Build paused. Input needed: {question}", "high")
