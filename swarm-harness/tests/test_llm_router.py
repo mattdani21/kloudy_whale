@@ -74,7 +74,7 @@ async def test_deepseek_without_key_raises(monkeypatch):
     monkeypatch.setattr(router, "call_deepseek", fail_deepseek)
 
     with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
-        await router.route([], "deepseek", "deepseek-chat")
+        await router.route([], "deepseek", "deepseek-v4-flash")
 
 
 @pytest.mark.asyncio
@@ -129,7 +129,7 @@ async def test_concurrent_calls_run_in_parallel(monkeypatch):
     router.session = SlowSession()
     start = time.monotonic()
     results = await asyncio.gather(*[
-        router.call_deepseek([{"role": "user", "content": "a"}], "deepseek-chat", 100)
+        router.call_deepseek([{"role": "user", "content": "a"}], "deepseek-v4-flash", 100)
         for _ in range(2)
     ])
     elapsed = time.monotonic() - start

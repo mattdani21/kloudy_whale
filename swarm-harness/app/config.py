@@ -40,5 +40,8 @@ class Config:
     # Default is the model known to work with the user's DeepSeek key;
     # override with DEEPSEEK_FALLBACK_MODEL for other tiers (e.g. ultra reasoning).
     DEEPSEEK_FALLBACK_MODEL: str = os.getenv("DEEPSEEK_FALLBACK_MODEL", "deepseek-v4-flash")
+    # Default models when a call doesn't specify one (router fallbacks).
+    DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    KIMI_MODEL: str = os.getenv("KIMI_MODEL", "kimi-k3")
 
 CONFIG = Config()

@@ -218,7 +218,7 @@ Then open **http://localhost:8000/** in a browser for the web UI.
 A lightweight single-page UI is served at the app root (`/`). No build step, no framework — plain HTML/JS.
 
 1. **GitHub target** — pick **"Use an existing repo"** (owner, repo name, fine-grained **PAT** with *Contents: Read and write* on the repo, optional branch) or **"Create a new repo"** (name, visibility, description; the repo is created under your PAT's account with `auto_init`, then the build writes to it). PAT with `repo` scope is required for create mode.
-2. **Build** — the prompt, the DeepKimi `API_KEY` for this deployment, and an optional token budget. The default 4-agent lineup (planner/reviewer DeepSeek, coder/merger Kimi — Kimi falls back to DeepSeek without a key) is used.
+2. **Build** — the prompt, the Kloudy Whale `API_KEY` for this deployment, and an optional token budget. The default 4-agent lineup: **planner + reviewer on Kimi `kimi-k3`** (stronger reasoning for planning and cross-review), **coder + merger on DeepSeek `deepseek-v4-flash`** (fast, quality code). Kimi agents fall back to DeepSeek if no key is set.
 3. **Status** — live progress over WebSocket (auto-reconnects with backoff if the connection drops): state badge, token usage, steps done, human-gate prompts (answered inline), and the final output with the commit hash + files written. A **Recent builds** panel lists past builds (click one to reopen it, or just to see where it got to).
 
 Security notes: the PAT and API key are stored only in your browser's `localStorage` and in the build record in Redis (7-day TTL). The PAT is **never** returned by any API endpoint (redacted from summaries) and is never logged.
@@ -235,6 +235,8 @@ All configuration is environment-driven (`app/config.py`).
 | `KIMI_API_KEY` | *(empty)* | API key for Kimi/Moonshot. The router talks to `api.moonshot.ai` (international) by default; China-region keys need `KIMI_API_BASE=https://api.moonshot.cn/v1`. If unset, `kimi` agents automatically **fall back to DeepSeek** (`DEEPSEEK_FALLBACK_MODEL`) instead of failing |
 | `KIMI_API_BASE` | `https://api.moonshot.ai/v1` | Kimi/Moonshot OpenAI-compatible endpoint. Change to `https://api.moonshot.cn/v1` for China-region keys |
 | `DEEPSEEK_FALLBACK_MODEL` | `deepseek-v4-flash` | Model used when a `kimi` agent runs without `KIMI_API_KEY`. Override for other tiers (e.g. an "ultra reasoning" model ID) |
+| `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Default DeepSeek model when a call omits one (router fallback) |
+| `KIMI_MODEL` | `kimi-k3` | Default Kimi model when a call omits one (router fallback) |
 | `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |
@@ -260,10 +262,10 @@ All routes except `GET /v1/health` require the header `X-API-Key: <API_KEY>`.
 {
   "prompt": "Build a FastAPI todo app with SQLite persistence",
   "agents": [
-    {"role": "planner",  "provider": "deepseek", "model": "deepseek-chat"},
-    {"role": "coder",    "provider": "kimi",     "model": "kimi-k3"},
-    {"role": "reviewer", "provider": "deepseek", "model": "deepseek-chat"},
-    {"role": "merger",   "provider": "kimi",     "model": "kimi-k3"}
+    {"role": "planner",  "provider": "kimi",     "model": "kimi-k3"},
+    {"role": "coder",    "provider": "deepseek", "model": "deepseek-v4-flash"},
+    {"role": "reviewer", "provider": "kimi",     "model": "kimi-k3"},
+    {"role": "merger",   "provider": "deepseek", "model": "deepseek-v4-flash"}
   ],
   "strategy": "swarm",
   "token_budget": 4000000,
@@ -278,10 +280,10 @@ Or create a brand-new repo first (mutually exclusive with `repo`):
 {
   "prompt": "Build a FastAPI todo app with SQLite persistence",
   "agents": [
-    {"role": "planner",  "provider": "deepseek", "model": "deepseek-chat"},
-    {"role": "coder",    "provider": "kimi",     "model": "kimi-k3"},
-    {"role": "reviewer", "provider": "deepseek", "model": "deepseek-chat"},
-    {"role": "merger",   "provider": "kimi",     "model": "kimi-k3"}
+    {"role": "planner",  "provider": "kimi",     "model": "kimi-k3"},
+    {"role": "coder",    "provider": "deepseek", "model": "deepseek-v4-flash"},
+    {"role": "reviewer", "provider": "kimi",     "model": "kimi-k3"},
+    {"role": "merger",   "provider": "deepseek", "model": "deepseek-v4-flash"}
   ],
   "create_repo": {"name": "my-new-project", "token": "github_pat_...", "private": true, "description": "Built by DeepKimi"}
 }
@@ -312,7 +314,7 @@ Or create a brand-new repo first (mutually exclusive with `repo`):
 ```bash
 curl -X POST http://localhost:8000/v1/build \
   -H "X-API-Key: dev-key-change-me" -H "Content-Type: application/json" \
-  -d '{"prompt":"Write a hello-world CLI in Python","agents":[{"role":"planner","provider":"deepseek","model":"deepseek-chat"},{"role":"coder","provider":"kimi","model":"kimi-k3"},{"role":"reviewer","provider":"deepseek","model":"deepseek-chat"},{"role":"merger","provider":"kimi","model":"kimi-k3"}]}'
+  -d '{"prompt":"Write a hello-world CLI in Python","agents":[{"role":"planner","provider":"kimi","model":"kimi-k3"},{"role":"coder","provider":"deepseek","model":"deepseek-v4-flash"},{"role":"reviewer","provider":"kimi","model":"kimi-k3"},{"role":"merger","provider":"deepseek","model":"deepseek-v4-flash"}]}'
 ```
 
 ### `GET /v1/build/{build_id}` — status & result

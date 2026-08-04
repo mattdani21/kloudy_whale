@@ -2,7 +2,7 @@
 import aiohttp
 import asyncio
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional, Tuple
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import CONFIG
 
@@ -32,7 +32,8 @@ class LLMRouter:
         await self.session.close()
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    async def call_deepseek(self, messages: List[Dict], model: str = "deepseek-chat", max_tokens: int = 4000) -> Tuple[str, int]:
+    async def call_deepseek(self, messages: List[Dict], model: Optional[str] = None, max_tokens: int = 4000) -> Tuple[str, int]:
+        model = model or CONFIG.DEEPSEEK_MODEL
         payload = {
             "model": model,
             "messages": messages,
@@ -48,7 +49,8 @@ class LLMRouter:
         )
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    async def call_kimi(self, messages: List[Dict], model: str = "kimi-k3", max_tokens: int = 4000) -> Tuple[str, int]:
+    async def call_kimi(self, messages: List[Dict], model: Optional[str] = None, max_tokens: int = 4000) -> Tuple[str, int]:
+        model = model or CONFIG.KIMI_MODEL
         payload = {
             "model": model,
             "messages": messages,

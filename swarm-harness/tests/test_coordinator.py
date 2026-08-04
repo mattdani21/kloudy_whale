@@ -52,10 +52,10 @@ class FakeNotifier:
                             "message": message, "urgency": urgency})
 
 AGENTS = [
-    AgentConfig(role=AgentRole.PLANNER, provider=ModelProvider.DEEPSEEK, model="deepseek-chat"),
+    AgentConfig(role=AgentRole.PLANNER, provider=ModelProvider.DEEPSEEK, model="deepseek-v4-flash"),
     AgentConfig(role=AgentRole.CODER, provider=ModelProvider.KIMI, model="kimi-k3"),
-    AgentConfig(role=AgentRole.TESTER, provider=ModelProvider.DEEPSEEK, model="deepseek-chat"),
-    AgentConfig(role=AgentRole.REVIEWER, provider=ModelProvider.DEEPSEEK, model="deepseek-chat"),
+    AgentConfig(role=AgentRole.TESTER, provider=ModelProvider.DEEPSEEK, model="deepseek-v4-flash"),
+    AgentConfig(role=AgentRole.REVIEWER, provider=ModelProvider.DEEPSEEK, model="deepseek-v4-flash"),
     AgentConfig(role=AgentRole.MERGER, provider=ModelProvider.KIMI, model="kimi-k3"),
 ]
 

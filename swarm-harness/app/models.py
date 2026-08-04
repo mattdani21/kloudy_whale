@@ -31,7 +31,7 @@ class ModelProvider(Enum):
 class AgentConfig:
     role: AgentRole
     provider: ModelProvider
-    model: str  # e.g., "deepseek-chat", "kimi-k3"
+    model: str  # e.g., "deepseek-v4-flash", "kimi-k3"
     temperature: float = 0.7
     max_tokens: int = 16384  # per-call output cap; deepseek-v4-flash reasons before answering, needs headroom
     system_prompt: str = ""

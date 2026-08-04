@@ -25,7 +25,7 @@ def make_build(build_id="b1", state=BuildState.QUEUED):
         prompt="build a thing",
         state=state,
         agents=[
-            AgentConfig(role=AgentRole.PLANNER, provider=ModelProvider.DEEPSEEK, model="deepseek-chat"),
+            AgentConfig(role=AgentRole.PLANNER, provider=ModelProvider.DEEPSEEK, model="deepseek-v4-flash"),
             AgentConfig(role=AgentRole.CODER, provider=ModelProvider.KIMI, model="kimi-k3", token_budget=30000),
         ],
         steps=[

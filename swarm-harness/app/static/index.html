@@ -567,10 +567,10 @@ async function start() {
     prompt: $("prompt").value.trim(),
     token_budget: Number.isFinite(budget) ? budget : 4000000,
     agents: [
-      { role: "planner", provider: "deepseek", model: "deepseek-v4-flash" },
-      { role: "coder", provider: "kimi", model: "kimi-k3" },
-      { role: "reviewer", provider: "deepseek", model: "deepseek-v4-flash" },
-      { role: "merger", provider: "kimi", model: "kimi-k3" },
+      { role: "planner", provider: "kimi", model: "kimi-k3" },
+      { role: "coder", provider: "deepseek", model: "deepseek-v4-flash" },
+      { role: "reviewer", provider: "kimi", model: "kimi-k3" },
+      { role: "merger", provider: "deepseek", model: "deepseek-v4-flash" },
     ],
   };
   if (createRepo) body.create_repo = createRepo;

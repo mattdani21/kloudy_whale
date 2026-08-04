@@ -56,9 +56,9 @@ def client():
 BUILD_BODY = {
     "prompt": "Build a hello world API",
     "agents": [
-        {"role": "planner", "provider": "deepseek", "model": "deepseek-chat"},
+        {"role": "planner", "provider": "deepseek", "model": "deepseek-v4-flash"},
         {"role": "coder", "provider": "kimi", "model": "kimi-k3"},
-        {"role": "reviewer", "provider": "deepseek", "model": "deepseek-chat"},
+        {"role": "reviewer", "provider": "deepseek", "model": "deepseek-v4-flash"},
         {"role": "merger", "provider": "kimi", "model": "kimi-k3"},
     ],
     "token_budget": 40000,
