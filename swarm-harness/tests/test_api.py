@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.config import CONFIG
@@ -292,3 +293,44 @@ def test_quota_disabled_when_zero(client, fakes, monkeypatch):
     store.builds["active1"] = SwarmBuild(id="active1", prompt="p", state=BuildState.EXECUTING)
     resp = client.post("/v1/build", json=BUILD_BODY, headers=API_KEY_HEADER)
     assert resp.status_code == 200
+
+
+# --- preloaded GitHub token (DEFAULT_GITHUB_TOKEN) ---
+
+def _preload_config(default_token="default-pat"):
+    return SimpleNamespace(
+        API_KEYS=(CONFIG.API_KEY,),
+        API_KEY=CONFIG.API_KEY,
+        MAX_CONCURRENT_BUILDS=0,
+        DAILY_TOKEN_BUDGET=0,
+        DEFAULT_GITHUB_TOKEN=default_token,
+    )
+
+def test_config_endpoint_exposes_preload_flag(client, monkeypatch):
+    monkeypatch.setattr(builds_module, "CONFIG", _preload_config(default_token=""))
+    assert client.get("/v1/config").json() == {"github_token_preloaded": False}
+    monkeypatch.setattr(builds_module, "CONFIG", _preload_config(default_token="ghp_secret"))
+    assert client.get("/v1/config").json() == {"github_token_preloaded": True}
+
+def test_create_repo_uses_preloaded_token(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module, "CONFIG", _preload_config())
+    used = {}
+    async def fake_create_repo(self, name, private=True, description=""):
+        used["token"] = self.token
+        return {"owner": "mattdani21", "name": name, "full_name": f"mattdani21/{name}",
+                "html_url": f"https://github.com/mattdani21/{name}"}
+    monkeypatch.setattr(builds_module.GitHubRepoClient, "create_repo", fake_create_repo)
+    body = {**BUILD_BODY, "create_repo": {"name": "preloaded-repo", "private": True, "description": ""}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    assert used["token"] == "default-pat"
+    assert coordinator.submitted[0].metadata["repo"]["token"] == "default-pat"
+
+def test_repo_mode_uses_preloaded_token(client, fakes, monkeypatch):
+    store, coordinator = fakes
+    monkeypatch.setattr(builds_module, "CONFIG", _preload_config())
+    body = {**BUILD_BODY, "repo": {"owner": "acme", "name": "proj", "branch": "main"}}
+    resp = client.post("/v1/build", json=body, headers=API_KEY_HEADER)
+    assert resp.status_code == 200
+    assert coordinator.submitted[0].metadata["repo"]["token"] == "default-pat"

@@ -237,6 +237,7 @@ All configuration is environment-driven (`app/config.py`).
 | `DEEPSEEK_FALLBACK_MODEL` | `deepseek-v4-flash` | Model used when a `kimi` agent runs without `KIMI_API_KEY`. Override for other tiers (e.g. an "ultra reasoning" model ID) |
 | `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Default DeepSeek model when a call omits one (router fallback) |
 | `KIMI_MODEL` | `kimi-k3` | Default Kimi model when a call omits one (router fallback) |
+| `DEFAULT_GITHUB_TOKEN` | *(empty)* | **Preloaded GitHub PAT**: builds that omit a token (`repo` or `create_repo`) use this one. Personal deployments set it so the UI needs no PAT entry. Never exposed by any endpoint — `/v1/config` only reports the boolean |
 | `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |

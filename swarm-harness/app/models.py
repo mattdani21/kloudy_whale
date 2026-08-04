@@ -56,17 +56,20 @@ class Step:
 
 @dataclass
 class RepoConfig:
-    """GitHub repo the build's files are written to (PAT stored per-build, never logged)."""
+    """GitHub repo the build's files are written to (PAT stored per-build, never logged).
+
+    token may be empty — the API fills it from DEFAULT_GITHUB_TOKEN when unset.
+    """
     owner: str
     name: str
-    token: str
+    token: str = ""
     branch: Optional[str] = None  # None -> default branch
 
 @dataclass
 class CreateRepoConfig:
     """Create a NEW GitHub repo under the PAT's owner before the build writes to it."""
     name: str
-    token: str
+    token: str = ""
     private: bool = True
     description: str = ""
 

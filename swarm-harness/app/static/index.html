@@ -489,6 +489,20 @@ $("repo-mode").addEventListener("change", () => { syncModeUI(); localStorage.set
 syncModeUI();
 
 let currentBuild = null;
+let GH_PRELOADED = false;
+
+async function loadConfig() {
+  try {
+    const c = await fetch("/v1/config").then(r => r.json());
+    GH_PRELOADED = !!c.github_token_preloaded;
+    if (GH_PRELOADED) {
+      $("repo-token").placeholder = "preloaded — leave blank";
+      $("repo-token").value = localStorage.getItem("dk:repo-token") || "";
+      document.querySelector("#repo-token").closest(".field").querySelector(".hint").textContent =
+        "GitHub PAT is preloaded on this deployment — leave blank to use it. Stored only in this browser + the build record (7-day TTL). Never returned by any endpoint.";
+    }
+  } catch (e) { /* config is best-effort */ }
+}
 
 function setState(s) {
   $("state-badge").className = "badge st-" + s;
@@ -551,14 +565,14 @@ async function start() {
       private: $("create-visibility").value === "true",
       description: $("create-description").value.trim(),
     };
-    if (!createRepo.name || !token) { alert("Fill in the new repo name and PAT."); return; }
+    if (!createRepo.name || (!token && !GH_PRELOADED)) { alert("Fill in the new repo name" + (GH_PRELOADED ? "." : " and PAT.")); return; }
   } else {
     repo = {
       owner: $("repo-owner").value.trim(), name: $("repo-name").value.trim(),
       token,
       branch: $("repo-branch").value.trim() || null,
     };
-    if (!repo.owner || !repo.name || !repo.token) { alert("Fill in the GitHub repo owner, name and PAT."); return; }
+    if (!repo.owner || !repo.name || (!repo.token && !GH_PRELOADED)) { alert("Fill in the GitHub repo owner, name" + (GH_PRELOADED ? "." : " and PAT.")); return; }
   }
   if (!$("api-key").value) { alert("Fill in the Kloudy Whale API key."); return; }
   if (!$("prompt").value.trim()) { alert("Describe what the swarm should build."); return; }
@@ -711,6 +725,7 @@ async function openBuild(buildId) {
 
 $("start").onclick = start;
 loadHistory();
+loadConfig();
 </script>
 </body>
 </html>

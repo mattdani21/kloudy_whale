@@ -101,7 +101,9 @@ async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
         if req.repo:
             raise HTTPException(status_code=400, detail="Provide either 'repo' or 'create_repo', not both.")
         if not req.create_repo.token:
-            raise HTTPException(status_code=400, detail="create_repo requires a PAT (token)")
+            req.create_repo.token = CONFIG.DEFAULT_GITHUB_TOKEN
+        if not req.create_repo.token:
+            raise HTTPException(status_code=400, detail="create_repo requires a PAT (token) — pass one or set DEFAULT_GITHUB_TOKEN")
         if not REPO_NAME_RE.match(req.create_repo.name) or ".." in req.create_repo.name:
             raise HTTPException(
                 status_code=400,
@@ -118,6 +120,11 @@ async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
         if not created_repo.get("owner") or not created_repo.get("name"):
             raise HTTPException(status_code=502, detail="GitHub repo creation returned an unexpected response")
         repo = RepoConfig(owner=created_repo["owner"], name=created_repo["name"], token=req.create_repo.token)
+    elif req.repo:
+        if not req.repo.token:
+            req.repo.token = CONFIG.DEFAULT_GITHUB_TOKEN
+        if not req.repo.token:
+            raise HTTPException(status_code=400, detail="repo requires a PAT (token) — pass one or set DEFAULT_GITHUB_TOKEN")
 
     build_id = await coordinator.submit(req.prompt, req.agents, req.token_budget, req.strategy, repo=repo)
     if created_repo:
@@ -139,6 +146,11 @@ async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
         "repo": None if not repo else {"owner": repo.owner, "name": repo.name, "branch": repo.branch},
         "repo_created": created_repo["html_url"] if created_repo else None,
     }
+
+@router.get("/v1/config")
+async def get_config():
+    """Public capability flags so the UI can adapt (no secrets)."""
+    return {"github_token_preloaded": bool(CONFIG.DEFAULT_GITHUB_TOKEN)}
 
 @router.get("/v1/build/{build_id}")
 async def get_build(build_id: str, auth: str = Depends(verify_api_key)):

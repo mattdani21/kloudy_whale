@@ -43,5 +43,7 @@ class Config:
     # Default models when a call doesn't specify one (router fallbacks).
     DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
     KIMI_MODEL: str = os.getenv("KIMI_MODEL", "kimi-k3")
+    # Preloaded GitHub PAT: builds that omit a token use this one (personal deployments).
+    DEFAULT_GITHUB_TOKEN: str = os.getenv("DEFAULT_GITHUB_TOKEN", "")
 
 CONFIG = Config()
