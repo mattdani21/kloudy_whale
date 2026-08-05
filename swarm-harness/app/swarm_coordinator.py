@@ -69,7 +69,9 @@ class SwarmCoordinator:
         self.router = LLMRouter()
         self.pool = AgentPool(self.router, self.store)
 
-    async def submit(self, prompt: str, agents: List[AgentConfig], token_budget: int = 4000000, strategy: str = "swarm", repo: Optional[RepoConfig] = None) -> str:
+    async def submit(self, prompt: str, agents: List[AgentConfig], token_budget: int = 4000000, strategy: str = "swarm",
+                     repo: Optional[RepoConfig] = None, slack_webhook: Optional[str] = None,
+                     repo_created: bool = False, repo_html_url: Optional[str] = None) -> str:
         build_id = hashlib.sha256(f"{prompt}{datetime.utcnow().isoformat()}".encode()).hexdigest()[:12]
         build = SwarmBuild(
             id=build_id,
@@ -81,6 +83,11 @@ class SwarmCoordinator:
         )
         if repo:
             build.metadata["repo"] = {"owner": repo.owner, "name": repo.name, "token": repo.token, "branch": repo.branch}
+            if repo_created:
+                build.metadata["repo"]["created"] = True
+                build.metadata["repo"]["html_url"] = repo_html_url
+        if slack_webhook:
+            build.metadata["slack_webhook"] = slack_webhook
         await self.store.save(build)
         asyncio.create_task(self._run(build))
         return build_id

@@ -83,6 +83,15 @@
     border: 1px solid var(--border-subtle); border-radius: 999px;
     padding: 4px 11px; background: rgba(255,255,255,0.02);
   }
+  .palette-trigger {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 500 12px var(--sans); color: var(--text3);
+    border: 1px solid var(--border-subtle); border-radius: 7px;
+    padding: 5px 10px; background: rgba(255,255,255,0.02); cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .palette-trigger:hover { color: var(--text); border-color: var(--border); }
+  @media (max-width: 640px) { .palette-trigger span { display: none; } }
   .live-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px rgba(39,166,68,0.8); animation: pulse 2.4s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
   .gh-link { color: var(--text3); text-decoration: none; font-size: 12.5px; font-weight: 500; transition: color .15s; }
@@ -295,6 +304,54 @@
   #human-send:disabled { opacity: 0.4; cursor: default; }
   #human-send svg { width: 15px; height: 15px; }
 
+  /* ---- command palette ---- */
+  .palette-overlay {
+    position: fixed; inset: 0; z-index: 60;
+    display: grid; place-items: start center; padding-top: 14vh;
+    background: rgba(0,0,0,0.52); backdrop-filter: blur(3px);
+  }
+  .palette-overlay[hidden] { display: none; }
+  .palette {
+    width: 560px; max-width: calc(100vw - 32px);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; animation: gateIn .14s ease;
+    box-shadow: rgba(0,0,0,0) 0px 8px 2px, rgba(0,0,0,0.01) 0px 5px 2px,
+                rgba(0,0,0,0.04) 0px 3px 2px, rgba(0,0,0,0.07) 0px 1px 1px,
+                rgba(0,0,0,0.08) 0px 0px 1px;
+  }
+  .palette-input-row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border-subtle);
+  }
+  .palette-input-row svg { width: 16px; height: 16px; color: var(--text4); flex-shrink: 0; }
+  .palette-input-row input {
+    flex: 1; min-width: 0; border: 0; background: transparent; padding: 0;
+    font: 15px var(--sans); color: var(--text); font-feature-settings: 'cv01','ss03';
+  }
+  .palette-input-row input:focus { outline: none; box-shadow: none; border: 0; }
+  .palette-input-row input::placeholder { color: var(--text4); }
+  .palette-kbd {
+    font-family: var(--mono); font-size: 10.5px; color: var(--text4);
+    border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .palette-list { max-height: 330px; overflow-y: auto; padding: 6px; }
+  .palette-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 13.5px; color: var(--text2);
+  }
+  .palette-item .picon {
+    width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,0.05); color: var(--text3);
+  }
+  .palette-item .picon svg { width: 14px; height: 14px; }
+  .palette-item .phint { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text4); white-space: nowrap; }
+  .palette-item.selected { background: var(--violet-dim); color: var(--text); }
+  .palette-item.selected .picon { background: rgba(113,112,255,0.25); color: var(--violet-hi); }
+  .palette-empty { padding: 20px; text-align: center; color: var(--text4); font-size: 13px; }
+
   /* ---- history ---- */
   .hist-row {
     display: flex; align-items: center; gap: 12px;
@@ -344,7 +401,12 @@
     </div>
   </div>
   <div class="topbar-right">
+    <button class="palette-trigger" id="palette-trigger" aria-label="Command palette">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/></svg>
+      <span>⌘K</span>
+    </button>
     <span class="live-pill"><span class="dot"></span>platform live</span>
+    <a class="gh-link" href="/landing">about</a>
     <a class="gh-link" href="https://github.com/mattdani21/kloudy_whale" target="_blank" rel="noopener">kloudy_whale ↗</a>
   </div>
 </header>
@@ -473,6 +535,18 @@
 
   </section>
 </main>
+
+<!-- command palette -->
+<div class="palette-overlay" id="palette" hidden>
+  <div class="palette" role="dialog" aria-label="Command palette">
+    <div class="palette-input-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="palette-input" placeholder="Type a command…" autocomplete="off" aria-label="Command">
+      <span class="palette-kbd">esc</span>
+    </div>
+    <div class="palette-list" id="palette-list"></div>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -722,6 +796,93 @@ async function openBuild(buildId) {
     connectWS(buildId);
   } catch (e) { alert("Load failed: " + e.message); }
 }
+
+/* ---- command palette (⌘K) ---- */
+const PICONS = {
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4.5v15l13-7.5z"/></svg>',
+  branch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="5" r="2.4"/><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 7.4v9.2M8.2 9h5.4c1.8 0 2.6 1.2 2.6 2.6v2.2"/></svg>',
+  history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l.8 12a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9l.8-12"/></svg>',
+  reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/></svg>',
+};
+
+let paletteSel = 0;
+
+function paletteCommands() {
+  const cmds = [
+    { id: "focus", icon: PICONS.plus, label: "New build", hint: "focus the prompt",
+      run: () => { closePalette(); $("prompt").scrollIntoView({ behavior: "smooth", block: "center" }); setTimeout(() => $("prompt").focus(), 350); } },
+    { id: "launch", icon: PICONS.play, label: "Launch build", hint: "submit",
+      run: () => { closePalette(); start(); } },
+    { id: "mode", icon: PICONS.branch,
+      label: $("repo-mode").value === "create" ? "Use an existing repo" : "Create a new repo",
+      hint: "toggle target",
+      run: () => { closePalette(); $("repo-mode").value = $("repo-mode").value === "create" ? "existing" : "create"; $("repo-mode").dispatchEvent(new Event("change")); } },
+    { id: "history", icon: PICONS.history, label: "Recent builds", hint: "scroll",
+      run: () => { closePalette(); $("history").scrollIntoView({ behavior: "smooth", block: "start" }); } },
+    { id: "copy", icon: PICONS.copy, label: "Copy build ID", hint: currentBuild ? "build " + currentBuild : "no active build",
+      run: () => { if (currentBuild) { navigator.clipboard && navigator.clipboard.writeText(currentBuild); closePalette(); } } },
+    { id: "clear", icon: PICONS.trash, label: "Clear form", hint: "reset inputs",
+      run: () => { KEY_STORE.forEach(id => $(id).value = ""); localStorage.clear(); closePalette(); syncModeUI(); } },
+  ];
+  if ($("human").classList.contains("on")) {
+    cmds.unshift({ id: "gate", icon: PICONS.reply, label: "Reply to the swarm gate", hint: "answer now",
+      run: () => { closePalette(); $("human-a").focus(); } });
+  }
+  return cmds;
+}
+
+function filteredPalette() {
+  const q = $("palette-input").value.trim().toLowerCase();
+  return paletteCommands().filter(c => !q || c.label.toLowerCase().includes(q) || (c.hint || "").toLowerCase().includes(q));
+}
+
+function openPalette() {
+  $("palette").hidden = false;
+  $("palette-input").value = "";
+  paletteSel = 0;
+  renderPalette();
+  $("palette-input").focus();
+}
+
+function closePalette() { $("palette").hidden = true; }
+
+function renderPalette() {
+  const items = filteredPalette();
+  const list = $("palette-list");
+  paletteSel = Math.min(paletteSel, Math.max(0, items.length - 1));
+  if (!items.length) { list.innerHTML = "<div class='palette-empty'>No commands found</div>"; return; }
+  list.innerHTML = items.map((c, i) =>
+    `<div class="palette-item${i === paletteSel ? " selected" : ""}" data-idx="${i}">
+       <span class="picon">${c.icon}</span><span>${escapeHtml(c.label)}</span>
+       <span class="phint">${escapeHtml(c.hint || "")}</span>
+     </div>`).join("");
+  list.querySelectorAll("[data-idx]").forEach(el => {
+    el.onclick = () => filteredPalette()[+el.dataset.idx].run();
+    el.onmouseenter = () => { paletteSel = +el.dataset.idx; renderPalette(); };
+  });
+}
+
+$("palette-trigger").onclick = openPalette;
+$("palette-input").addEventListener("input", () => { paletteSel = 0; renderPalette(); });
+document.addEventListener("keydown", ev => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
+    ev.preventDefault();
+    $("palette").hidden ? openPalette() : closePalette();
+    return;
+  }
+  if ($("palette").hidden) return;
+  if (ev.key === "Escape") { closePalette(); return; }
+  if (ev.key === "ArrowDown") { ev.preventDefault(); paletteSel++; renderPalette(); return; }
+  if (ev.key === "ArrowUp") { ev.preventDefault(); paletteSel--; renderPalette(); return; }
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    const items = filteredPalette();
+    if (items[paletteSel]) items[paletteSel].run();
+  }
+});
 
 $("start").onclick = start;
 loadHistory();

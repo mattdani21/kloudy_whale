@@ -27,11 +27,17 @@ class FakeCoordinator:
         self.store = store
         self.submitted = []
 
-    async def submit(self, prompt, agents, token_budget=50000, strategy="swarm", repo=None):
+    async def submit(self, prompt, agents, token_budget=50000, strategy="swarm", repo=None,
+                     slack_webhook=None, repo_created=False, repo_html_url=None):
         build = SwarmBuild(id="testbuild123", prompt=prompt, state=BuildState.QUEUED,
                            strategy=strategy, agents=agents, token_budget_total=token_budget)
         if repo:
             build.metadata["repo"] = {"owner": repo.owner, "name": repo.name, "token": repo.token, "branch": repo.branch}
+            if repo_created:
+                build.metadata["repo"]["created"] = True
+                build.metadata["repo"]["html_url"] = repo_html_url
+        if slack_webhook:
+            build.metadata["slack_webhook"] = slack_webhook
         await self.store.save(build)
         self.submitted.append(build)
         return build.id

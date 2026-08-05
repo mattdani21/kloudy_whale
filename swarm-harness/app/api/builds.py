@@ -126,17 +126,11 @@ async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
         if not req.repo.token:
             raise HTTPException(status_code=400, detail="repo requires a PAT (token) — pass one or set DEFAULT_GITHUB_TOKEN")
 
-    build_id = await coordinator.submit(req.prompt, req.agents, req.token_budget, req.strategy, repo=repo)
-    if created_repo:
-        build = await store.load(build_id)
-        if build and build.metadata.get("repo"):
-            build.metadata["repo"]["created"] = True
-            build.metadata["repo"]["html_url"] = created_repo["html_url"]
-            await store.save(build)
-    if req.slack_webhook:
-        build = await store.load(build_id)
-        build.metadata["slack_webhook"] = req.slack_webhook
-        await store.save(build)
+    build_id = await coordinator.submit(
+        req.prompt, req.agents, req.token_budget, req.strategy, repo=repo,
+        slack_webhook=req.slack_webhook,
+        repo_created=bool(created_repo), repo_html_url=created_repo["html_url"] if created_repo else None,
+    )
     return {
         "build_id": build_id,
         "state": "queued",

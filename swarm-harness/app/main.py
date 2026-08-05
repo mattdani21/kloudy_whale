@@ -23,6 +23,10 @@ STATIC_DIR = Path(__file__).parent / "static"
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
+@app.get("/landing", include_in_schema=False)
+async def landing():
+    return FileResponse(STATIC_DIR / "landing.html")
+
 @app.get("/v1/health")
 async def health():
     return {"status": "ok", "version": "1.0.0"}
