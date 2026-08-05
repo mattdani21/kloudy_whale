@@ -245,6 +245,7 @@ All configuration is environment-driven (`app/config.py`).
 | `MAX_CONCURRENT_BUILDS` | `0` | Quota: reject new builds with `429` when this many builds are in-flight. `0` = unlimited |
 | `DAILY_TOKEN_BUDGET` | `0` | Quota: reject new builds with `429` when token usage across the last 24h reaches this. `0` = unlimited |
 | `LLM_CONCURRENCY` | `4` | Max parallel LLM calls per provider. Swarm steps (e.g. 5 coders) run concurrently up to this; a global lock used to serialize every call — the main cause of slow builds. `0` = unlimited |
+| `REVIEW_PROMPT_MAX_CHARS` | `12000` | Cap on step outputs embedded in review/merge prompts. Long coder outputs make kimi reviewers reason for minutes; truncation is marked so reviewers can still flag a cut |
 | `DEFAULT_TOKEN_BUDGET` | `4000000` | Default per-build token budget (up to 4M) |
 | `NOTIFICATION_WEBHOOK` | *(empty)* | Generic webhook URL receiving build events |
 | `LOG_LEVEL` | `INFO` | Logging level (used by the worker) |

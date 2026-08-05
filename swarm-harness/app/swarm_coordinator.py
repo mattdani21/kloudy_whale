@@ -13,6 +13,7 @@ from app.notifications import NotificationDispatcher
 from app.state_machine import can_transition
 from app.github_client import GitHubRepoClient
 from app.agent_pool import unwrap_error
+from app.config import CONFIG
 
 HUMAN_INPUT_TAG = "[HUMAN_INPUT]"
 
@@ -47,6 +48,19 @@ def _gate_question(prompt: str) -> str:
     """Human-gate question, cleaned for display: no tag, no repo-manifest boilerplate."""
     q = prompt.replace(HUMAN_INPUT_TAG, "").strip()
     return q.replace(REPO_MANIFEST_INSTRUCTION, "").strip()
+
+
+def _truncate(text: str, cap: Optional[int] = None) -> str:
+    """Cap a step's output before it is embedded in a review/merge prompt.
+
+    Reviewers (kimi-k3) reason over the full text; a multi-thousand-line coder
+    output makes a trivial build take minutes. Truncate to REVIEW_PROMPT_MAX_CHARS
+    and say so, so the reviewer still flags 'the output was cut off' if it matters.
+    """
+    cap = cap if cap is not None else int(CONFIG.REVIEW_PROMPT_MAX_CHARS)
+    if not text or len(text) <= cap:
+        return text
+    return text[:cap] + f"\n… [truncated {len(text) - cap} chars for review]"
 
 class SwarmCoordinator:
     def __init__(self):
@@ -176,7 +190,7 @@ class SwarmCoordinator:
                             agent_id=f"{reviewer.role.value}_{reviewer.provider.value}",
                             role=AgentRole.REVIEWER,
                             provider=reviewer.provider,
-                            prompt=f"Review this output for correctness and completeness. Approve or reject with reason:\n\n{step.result}"
+                            prompt=f"Review this output for correctness and completeness. Approve or reject with reason:\n\n{_truncate(step.result)}"
                         )
                         build.steps.append(review_step)
                         review_futures.append(self.pool.execute_step(build, review_step, reviewer))
@@ -210,7 +224,7 @@ class SwarmCoordinator:
                 await self._transition(build, BuildState.MERGING)
                 merger = next((a for a in build.agents if a.role == AgentRole.MERGER), build.agents[0])
                 merge_context = "\n\n".join([
-                    f"--- {s.role.value} ---\n{s.result}"
+                    f"--- {s.role.value} ---\n{_truncate(s.result)}"
                     for s in build.steps
                     if s.result and s.role != AgentRole.REVIEWER
                 ])

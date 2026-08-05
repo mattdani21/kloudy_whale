@@ -45,5 +45,8 @@ class Config:
     KIMI_MODEL: str = os.getenv("KIMI_MODEL", "kimi-k3")
     # Preloaded GitHub PAT: builds that omit a token use this one (personal deployments).
     DEFAULT_GITHUB_TOKEN: str = os.getenv("DEFAULT_GITHUB_TOKEN", "")
+    # Cap for step outputs embedded in review/merge prompts (long outputs slow kimi
+    # reviewers dramatically). Truncated text is marked so reviewers can flag cuts.
+    REVIEW_PROMPT_MAX_CHARS: int = int(os.getenv("REVIEW_PROMPT_MAX_CHARS", "12000"))
 
 CONFIG = Config()

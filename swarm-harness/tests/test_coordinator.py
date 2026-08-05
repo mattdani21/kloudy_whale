@@ -2,7 +2,7 @@ import asyncio
 import pytest
 
 from app.models import AgentConfig, AgentRole, BuildState, ModelProvider, SwarmBuild
-from app.swarm_coordinator import SwarmCoordinator, _gate_question, HUMAN_INPUT_TAG, REPO_MANIFEST_INSTRUCTION
+from app.swarm_coordinator import SwarmCoordinator, _gate_question, _truncate, HUMAN_INPUT_TAG, REPO_MANIFEST_INSTRUCTION
 
 class FakeRouter:
     """Canned LLM responses keyed off the prompt content."""
@@ -183,3 +183,14 @@ def test_gate_question_strips_tag_and_manifest_boilerplate():
 
 def test_gate_question_plain_prompt_unchanged():
     assert _gate_question(f"{HUMAN_INPUT_TAG} Which database?") == "Which database?"
+
+
+def test_truncate_keeps_short_text():
+    assert _truncate("short output", cap=100) == "short output"
+
+
+def test_truncate_caps_long_text_and_marks_cut():
+    out = _truncate("x" * 500, cap=100)
+    assert len(out) == 100 + len("\n… [truncated 400 chars for review]")
+    assert "truncated 400 chars" in out
+    assert out.startswith("x" * 100)
