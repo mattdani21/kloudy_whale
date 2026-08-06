@@ -23,7 +23,10 @@ _Working FastAPI swarm harness (DeepKimi) with staged deploy config; not yet pub
 
 ## Test command
 
-`cd swarm-harness && pip install -r requirements-dev.txt && pytest -q` (matches CI: .github/workflows/ci.yml).
+`cd swarm-harness && pip install -r requirements.txt -r requirements-dev.txt && pytest -q` (matches CI: .github/workflows/ci.yml)
+
+> Verified 2026-08-06 (orchestrator Step-4): 81/81 pass, no Redis/API keys needed (in-memory fakes).
+> Note: `requirements-dev.txt` alone is NOT enough — tests import fastapi/redis from `requirements.txt`..
 
 ## Run command
 
