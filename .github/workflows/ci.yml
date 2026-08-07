@@ -35,9 +35,14 @@ jobs:
       - name: Smoke-test /v1/health in the container
         run: |
           # PORT set like Railway does; REDIS_URL deliberately unreachable to
-          # prove /v1/health does not depend on Redis being up.
+          # prove /v1/health does not depend on Redis being up. ENVIRONMENT +
+          # full prod secrets prove the production startup validation passes
+          # with complete configuration (APP_API_KEY not the dev default, an
+          # LLM provider key present).
           docker run -d --name kw -p 8080:8080 \
             -e PORT=8080 -e REDIS_URL=redis://127.0.0.1:6399 \
+            -e ENVIRONMENT=production -e APP_API_KEY=ci-prod-guard-key \
+            -e DEEPSEEK_API_KEY=ci-fake-key \
             kloudywhale:ci
           for i in $(seq 1 30); do
             body=$(curl -sS -m 2 http://127.0.0.1:8080/v1/health 2>/dev/null || true)
@@ -53,3 +58,22 @@ jobs:
           docker rm -f kw
           echo "FAILED: /v1/health never returned status ok in the container" >&2
           exit 1
+      - name: Production fail-fast guard (dev APP_API_KEY -> refuses to start)
+        # The shipped image must refuse to boot in production mode with the
+        # public dev default API key instead of serving /v1/health unprotected.
+        run: |
+          set +e
+          out=$(docker run --rm \
+            -e PORT=8080 -e ENVIRONMENT=production \
+            -e REDIS_URL=redis://127.0.0.1:6399 -e DEEPSEEK_API_KEY=ci-fake-key \
+            kloudywhale:ci 2>&1)
+          code=$?
+          set -e
+          echo "$out" | tail -5
+          if [ "$code" -eq 0 ]; then
+            echo "FAILED: production container started without a real APP_API_KEY" >&2
+            exit 1
+          fi
+          echo "$out" | grep -q "APP_API_KEY" \
+            || { echo "FAILED: startup error did not mention APP_API_KEY" >&2; exit 1; }
+          echo "OK: production container refused to start with the dev default APP_API_KEY"

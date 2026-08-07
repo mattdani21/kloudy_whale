@@ -32,7 +32,7 @@ echo "GET /v1/health -> HTTP $code"
 grep -q '"status":"ok"' "$TMP/health.json" || fail "health body missing status ok: $(cat "$TMP/health.json")"
 echo "body: $(cat "$TMP/health.json")"
 
-# --- 2. /v1/config is public and tells us if a GitHub PAT is preloaded -------
+# --- 2. /v1/config is public and tells us about the deployment's mode -------
 code=$(curl -sS -m 20 -o "$TMP/config.json" -w '%{http_code}' "$BASE_URL/v1/config") \
   || fail "config probe failed"
 echo "GET /v1/config -> HTTP $code"
@@ -41,6 +41,8 @@ python3 - "$TMP/config.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 print("github_token_preloaded:", d.get("github_token_preloaded"))
+pm = d.get("production_mode")
+print("production_mode:", "absent (old build - redeploy to see it)" if pm is None else pm)
 PY
 
 # --- 3. Optional real build against the deployed instance --------------------

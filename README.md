@@ -238,8 +238,9 @@ All configuration is environment-driven (`app/config.py`).
 | `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Default DeepSeek model when a call omits one (router fallback) |
 | `KIMI_MODEL` | `kimi-k3` | Default Kimi model when a call omits one (router fallback) |
 | `DEFAULT_GITHUB_TOKEN` | *(empty)* | **Preloaded GitHub PAT**: builds that omit a token (`repo` or `create_repo`) use this one. Personal deployments set it so the UI needs no PAT entry. Never exposed by any endpoint — `/v1/config` only reports the boolean |
-| `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment.** Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
+| `API_KEY` / `APP_API_KEY` | `dev-key-change-me` | Shared secret required in the `X-API-Key` header on every request. **Change it before any non-local deployment** — production mode refuses to start with the dev default. Comma-separated values are accepted (multiple keys), e.g. `APP_API_KEY=key1,key2`. `API_KEY` is kept as a backward-compatible alias; `APP_API_KEY` wins when both are set. |
+| `ENVIRONMENT` | `development` | `development` or `production`. **Production mode fails fast at startup** with a clear error when `APP_API_KEY` is missing/`dev-key-change-me`, `REDIS_URL` is unset, or neither `DEEPSEEK_API_KEY` nor `KIMI_API_KEY` is set — it never silently serves builds with insecure defaults. Railway deploys are auto-detected (`RAILWAY_ENVIRONMENT` is always set there) and always run in production mode. |
+| `REDIS_URL` | `redis://localhost:6379` | Redis connection string. **Required (explicitly set) in production mode** — the localhost default only works for local development. |
 | `MAX_STEPS` | `25` | Reserved upper bound for build steps |
 | `STALE_BUILD_TTL_MINUTES` | `15` | Durability worker: reset builds stuck in a running state (planning/executing/reviewing/merging) after this many minutes and re-run them (`waiting_human` never touched) |
 | `MAX_CONCURRENT_BUILDS` | `0` | Quota: reject new builds with `429` when this many builds are in-flight. `0` = unlimited |
@@ -405,6 +406,21 @@ The whole point is a service that stays up: deploy once, keep it running, trigge
 - **Kubernetes** — `k8s-deployment.yaml`: 3-replica Deployment (secrets via `app-secrets`), LoadBalancer Service. Swap `your-registry/swarm-harness:latest` for your image.
 - **Managed platforms** — the design notes (`Architecture Overview.md`) discuss Railway/Render, AWS Lambda + EventBridge, Google Cloud Run + Cloud Tasks, Hetzner/DigitalOcean VPS, and Fly.io. For anything multi-instance, remember: **builds execute in-process**, so run the `worker/consumer.py` recovery loop alongside the API to pick up builds orphaned by restarts (it re-runs any build left in `queued`).
 
+### Production checklist
+
+The app refuses to start in **production mode** (set `ENVIRONMENT=production`; Railway deploys are auto-detected and always production) unless the security-critical settings are real. Set these on the deployment:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `ENVIRONMENT` | yes | `production` (Railway auto-detects via `RAILWAY_ENVIRONMENT`) |
+| `APP_API_KEY` | yes | a real secret — the dev default `dev-key-change-me` is **rejected at startup** |
+| `REDIS_URL` | yes | a reachable Redis — Railway Redis injects this automatically |
+| `DEEPSEEK_API_KEY` / `KIMI_API_KEY` | at least one | LLM provider keys; no agent can run without one |
+| `NOTIFICATION_WEBHOOK` | no | optional build-event webhook |
+| `DEFAULT_GITHUB_TOKEN` | recommended | preloaded PAT so the UI needs no per-build token entry |
+
+A misconfigured production boot fails immediately with an error naming exactly which variable is wrong — it never serves `/v1/health` while insecure. `/v1/config` (public) reports `production_mode` so you can verify the running deployment is in production mode.
+
 ---
 
 ## Current limitations
@@ -413,7 +429,7 @@ The codebase is an early implementation of the vision above. Known gaps:
 
 - **In-process execution** — builds live and die with the API process; the worker only rescues builds still in `queued`. For hard durability across crashes, an out-of-process queue (e.g. Celery/Redis Streams) is the natural next step.
 - **Tools are repo-bound, not general-purpose** — `write_file`/`read_file`/`commit` operate on the selected GitHub repo (real, verified); `execute_python` and `web_search` remain stubs. Sandboxed execution/search backends are the natural next step.
-- **Defaults are dev-oriented** — CORS allows all origins, the API key defaults to `dev-key-change-me`, and builds expire from Redis after 7 days. Harden all three before production.
+- **Defaults are dev-oriented** — CORS allows all origins, and builds expire from Redis after 7 days. (The API key's dev default `dev-key-change-me` is now refused at startup in production mode, and missing `REDIS_URL`/LLM provider keys fail fast — see the [production checklist](#production-checklist).)
 - **Plan cap** — a build executes at most 5 sub-tasks from the planner's plan.
 - **Retries** — unapproved steps are retried at most once; the failure mode for a majority-failed swarm is fail-fast.
 - **Rate limiting** — the LLM router serializes calls with a single lock; there is no per-provider throughput management or queue yet.

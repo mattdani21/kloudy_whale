@@ -19,6 +19,10 @@ spec:
         ports:
         - containerPort: 8000
         env:
+        # Production mode: refuses to start with the dev API key, no REDIS_URL,
+        # or no LLM provider key (app/config.py). Local dev: set to development.
+        - name: ENVIRONMENT
+          value: "production"
         - name: REDIS_URL
           valueFrom:
             secretKeyRef:
@@ -34,6 +38,11 @@ spec:
             secretKeyRef:
               name: app-secrets
               key: kimi-key
+        - name: APP_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: app-api-key
         resources:
           requests:
             memory: "256Mi"
