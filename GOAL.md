@@ -6,7 +6,7 @@ Deploy publicly and reach 1m paying customers
 
 ### M1 — Deploy publicly
 - [x] Railway deploy via the existing railway.json + root Dockerfile; verify /v1/health on the public URL
-- [ ] Production env: APP_API_KEY (not dev-key-change-me), REDIS_URL, DEEPSEEK_API_KEY, KIMI_API_KEY, NOTIFICATION_WEBHOOK
+- [x] Production env: APP_API_KEY (not dev-key-change-me), REDIS_URL, DEEPSEEK_API_KEY, KIMI_API_KEY, NOTIFICATION_WEBHOOK
 - [ ] Restrict CORS from all origins (README "Current limitations")
 - [ ] End-to-end smoke: one prompt → planned → coded → reviewed → merged build from the deployed instance
 *Definition of done:* a public URL serves /v1/health and a real build completes against the deployed instance.
