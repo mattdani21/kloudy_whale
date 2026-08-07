@@ -144,7 +144,10 @@ async def create_build(req: BuildRequest, auth: str = Depends(verify_api_key)):
 @router.get("/v1/config")
 async def get_config():
     """Public capability flags so the UI can adapt (no secrets)."""
-    return {"github_token_preloaded": bool(CONFIG.DEFAULT_GITHUB_TOKEN)}
+    return {
+        "github_token_preloaded": bool(CONFIG.DEFAULT_GITHUB_TOKEN),
+        "production_mode": bool(CONFIG.PRODUCTION_MODE),
+    }
 
 @router.get("/v1/build/{build_id}")
 async def get_build(build_id: str, auth: str = Depends(verify_api_key)):

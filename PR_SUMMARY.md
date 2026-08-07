@@ -1,73 +1,61 @@
-# Railway deploy: verified live /v1/health + repeatable smoke-build script
+# Production env: APP_API_KEY (not dev-key-change-me), REDIS_URL, DEEPSEEK_API_KEY (+ KIMI_API_KEY, NOTIFICATION_WEBHOOK)
 
 ## What this PR does
 
-Closes M1 "Deploy publicly" item 1: the Railway deploy path (root
-`railway.json` + root `Dockerfile`) is verified against the live public
-instance, and the verification is now repeatable in one command.
+Closes M1 "Deploy publicly" item 2: production deployments can no longer
+silently run with dev-oriented, insecure configuration. The env vars named in
+the issue (`APP_API_KEY`, `REDIS_URL`, `DEEPSEEK_API_KEY`, `KIMI_API_KEY`,
+`NOTIFICATION_WEBHOOK`) are read from the environment as before — the gap was
+that a misconfigured deploy would boot anyway with a public default key and
+fail confusingly at build time. Now it refuses to start, with an actionable
+error.
 
-- **`scripts/verify-deploy.sh` (new)** — one command to prove the public
-  instance is healthy and functional:
-  - `GET /v1/health` must return 200 `{"status":"ok",...}` (no auth, as
-    Railway's healthcheck needs)
-  - `GET /v1/config` reports whether `DEFAULT_GITHUB_TOKEN` is preloaded
-  - With `APP_API_KEY` set in the environment (never hardcoded, never
-    echoed): submits a real build (`create_repo` → private `kw-smoke-<ts>`
-    repo), polls `/v1/build/<id>` to a terminal state, and asserts
-    `completed` with a commit SHA.
-- **`.dockerignore` (new)** — Railway's build context previously included
-  `.git` + the 35 MB `.venv-test`; the image only needs
-  `swarm-harness/{requirements.txt,app,worker}`, so everything else is now
-  excluded from context uploads. `.env` / `.env.*` are also excluded so local
-  secrets can never land in an image layer.
-- **CI guards the deploy artifact (new)** — `deploy-image` job in
-  `.github/workflows/ci.yml` builds the root Dockerfile on every push/PR and
-  smoke-tests `/v1/health` inside the running container (Railway-style `PORT`,
-  unreachable `REDIS_URL` to prove health does not depend on Redis) — the same
-  probe the live instance passes.
-- **`STATE.md`** — deploy is no longer "staged": documents the live URL,
-  verification results (2026-08-07), enforced auth, and the E2E
-  command/blocker. (Also restores the `## Run command` section that a draft
-  edit had dropped.)
-- **`README.md`** — "Try the live instance" points at the verify script.
+- **Fail-fast production config validation** (`app/config.py`) — in production
+  mode the app raises at import time (container exits immediately, message
+  names the exact variable to fix) when any of these hold:
+  - `APP_API_KEY` missing, or still the public dev default `dev-key-change-me`
+  - `REDIS_URL` unset (the `redis://localhost:6379` default only fits local dev)
+  - neither `DEEPSEEK_API_KEY` nor `KIMI_API_KEY` set (no agent could run)
+  Development defaults are unchanged (tests, local dev, docker-compose).
+- **Production mode detection** — `ENVIRONMENT=production`, or Railway is
+  auto-detected (`RAILWAY_ENVIRONMENT` is always set on Railway deploys), so a
+  Railway box can never boot with development defaults by accident.
+- **`/v1/config` reports `production_mode`** (public, no secrets) so the live
+  deployment's posture is verifiable; `scripts/verify-deploy.sh` prints it.
+- **Deployment manifests wired** — docker-compose passes `ENVIRONMENT`
+  (default `development`); the k8s manifest sets `ENVIRONMENT=production` and
+  adds `APP_API_KEY` from `app-secrets`.
+- **CI guards the shipped image** (`deploy-image` job): the `/v1/health` smoke
+  now boots the container in production mode with complete config (proves the
+  validation passes when configured right), and a new negative guard asserts
+  the container **refuses to start** with the dev default key. No real
+  secrets anywhere in CI.
+- **README**: `ENVIRONMENT` config row, a "Production checklist" section
+  under Deployment, and the "Current limitations" note updated (CORS `*` and
+  the 7-day Redis TTL remain the open dev-oriented defaults).
 
-## Verification (live, 2026-08-07)
+## Verification
 
-- `https://kloudywhale-production.up.railway.app/v1/health` → **HTTP 200**
-  `{"status":"ok","version":"1.0.0"}`; `scripts/verify-deploy.sh` exits 0.
-- Deployed `/` is **byte-identical** to `swarm-harness/app/static/index.html`
-  on `main` → the live instance runs current main.
-- `/v1/config` → `{"github_token_preloaded":true}` (Redis, model keys, PAT
-  are set on the deployment).
-- Auth is enforced: code-default `dev-key-change-me` is rejected with
-  **401 Invalid API key** → the deployment has a custom `APP_API_KEY`.
-- `railway.json` validated against the official Railway schema (fetched with
-  a browser UA; it 403s urllib's default one) — DOCKERFILE builder,
-  `/v1/health` healthcheck, ON_FAILURE restart.
-- Dockerfile proven locally: `docker build` from repo root succeeds; running
-  the image with `PORT=8080` (as Railway injects) serves `/v1/health` 200 on
-  8080 only, and SIGTERM produces a clean "Shutting down / Finished server
-  process" (the `exec`'d `$PORT` CMD works).
-
-## How it was tested
-
-- `cd swarm-harness && pip install -r requirements.txt -r requirements-dev.txt && pytest -q`
-  → **81 passed** (Python 3.13 venv, matches the recorded 81/81 baseline).
-- `sh scripts/verify-deploy.sh` against the live URL → exit 0 (health 200,
-  config 200).
-- Docker: build OK; container bound `$PORT`; health 200; graceful shutdown.
+- Gate: `cd swarm-harness && pip install -r requirements.txt -r
+  requirements-dev.txt && pytest -q` → **93 passed** (81 baseline + 12 new
+  tests in `tests/test_config.py`: production detection incl. Railway,
+  dev-key rejection, REDIS_URL/provider-key requirements, legacy `API_KEY`
+  alias, and an import-time fail-fast integration test).
+- Subprocess proof: `ENVIRONMENT=production` with no/`dev-key-change-me` key
+  → `RuntimeError` listing all three problems; with a real key + `REDIS_URL` +
+  provider key (incl. `RAILWAY_ENVIRONMENT` set) → boots, `production_mode`
+  true.
+- The live Railway instance already carries a custom `APP_API_KEY`,
+  `REDIS_URL`, and DeepSeek/Kimi keys (STATE.md), so the production
+  validation passes on the next deploy and `/v1/health` stays green;
+  `/v1/config` will then report `production_mode: true`.
 
 ## Remaining for the milestone DoD
 
-The real-build E2E against the deployed instance requires the deployment
-owner's `APP_API_KEY` (a credential this worker must not read or echo). One
-command once available:
+The real-build E2E against the deployed instance still needs the deployment
+owner's `APP_API_KEY` (a credential this worker must not read or echo) —
+unchanged blocker, documented in STATE.md:
 
 ```
 APP_API_KEY=<owner key> scripts/verify-deploy.sh
 ```
-
-It creates a private `kw-smoke-<ts>` repo, submits a 4-agent swarm build
-(planner → coder → reviewer → merger), and polls to a terminal state. The
-deployed instance is ready for it: auth enforced, GitHub PAT preloaded,
-health green.

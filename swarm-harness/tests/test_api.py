@@ -310,13 +310,14 @@ def _preload_config(default_token="default-pat"):
         MAX_CONCURRENT_BUILDS=0,
         DAILY_TOKEN_BUDGET=0,
         DEFAULT_GITHUB_TOKEN=default_token,
+        PRODUCTION_MODE=False,
     )
 
 def test_config_endpoint_exposes_preload_flag(client, monkeypatch):
     monkeypatch.setattr(builds_module, "CONFIG", _preload_config(default_token=""))
-    assert client.get("/v1/config").json() == {"github_token_preloaded": False}
+    assert client.get("/v1/config").json() == {"github_token_preloaded": False, "production_mode": False}
     monkeypatch.setattr(builds_module, "CONFIG", _preload_config(default_token="ghp_secret"))
-    assert client.get("/v1/config").json() == {"github_token_preloaded": True}
+    assert client.get("/v1/config").json() == {"github_token_preloaded": True, "production_mode": False}
 
 def test_create_repo_uses_preloaded_token(client, fakes, monkeypatch):
     store, coordinator = fakes
