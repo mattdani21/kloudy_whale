@@ -27,3 +27,7 @@ _Deployed publicly on Railway: https://kloudywhale-production.up.railway.app —
 
 > Verified 2026-08-06 (orchestrator Step-4): 81/81 pass, no Redis/API keys needed (in-memory fakes).
 > Note: `requirements-dev.txt` alone is NOT enough — tests import fastapi/redis from `requirements.txt`..
+
+## Run command
+
+`docker compose up --build` in swarm-harness/ (Redis + API on :8000, README "Deployment"), or `uvicorn app.main:app --port 8000` with REDIS_URL set (app/config.py).
