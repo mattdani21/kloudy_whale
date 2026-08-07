@@ -9,6 +9,8 @@
 *.py[cod]
 .pytest_cache
 .DS_Store
+**/.env
+**/.env.*
 examples
 scripts
 /*.md

@@ -18,7 +18,13 @@ instance, and the verification is now repeatable in one command.
 - **`.dockerignore` (new)** — Railway's build context previously included
   `.git` + the 35 MB `.venv-test`; the image only needs
   `swarm-harness/{requirements.txt,app,worker}`, so everything else is now
-  excluded from context uploads.
+  excluded from context uploads. `.env` / `.env.*` are also excluded so local
+  secrets can never land in an image layer.
+- **CI guards the deploy artifact (new)** — `deploy-image` job in
+  `.github/workflows/ci.yml` builds the root Dockerfile on every push/PR and
+  smoke-tests `/v1/health` inside the running container (Railway-style `PORT`,
+  unreachable `REDIS_URL` to prove health does not depend on Redis) — the same
+  probe the live instance passes.
 - **`STATE.md`** — deploy is no longer "staged": documents the live URL,
   verification results (2026-08-07), enforced auth, and the E2E
   command/blocker. (Also restores the `## Run command` section that a draft
