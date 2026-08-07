@@ -2,18 +2,84 @@
 import os
 from dataclasses import dataclass, field
 
+# The well-known development default. Production mode refuses to start with it
+# (see _fail_fast_on_production_misconfiguration) — it must never protect a
+# public deployment.
+DEV_API_KEY = "dev-key-change-me"
+
 def _api_keys_tuple() -> tuple:
     """Comma-separated list of accepted API keys.
 
     Prefers APP_API_KEY; falls back to the legacy API_KEY name. A single
     key still works — just don't put a comma in it.
     """
-    raw = os.getenv("APP_API_KEY") or os.getenv("API_KEY", "dev-key-change-me")
+    raw = os.getenv("APP_API_KEY") or os.getenv("API_KEY", DEV_API_KEY)
     return tuple(k.strip() for k in raw.split(",") if k.strip())
+
+def _is_production() -> bool:
+    """True when the app must behave as a production deployment.
+
+    Set explicitly via ENVIRONMENT=production, or detected on managed
+    platforms: Railway sets RAILWAY_ENVIRONMENT on every deployment (the
+    environment name, usually "production"), so a Railway box can never
+    silently boot with development defaults.
+    """
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        return True
+    return bool(os.getenv("RAILWAY_ENVIRONMENT"))
+
+def _production_problems() -> list:
+    """Configuration problems that must block startup in production.
+
+    Returns [] when the environment is production-safe. Checks are about
+    presence/security only (never connectivity — health must not depend on
+    Redis being up).
+    """
+    problems = []
+    keys = _api_keys_tuple()
+    if not keys:
+        problems.append("APP_API_KEY: no API key configured — set APP_API_KEY to a real secret")
+    elif any(k == DEV_API_KEY for k in keys):
+        problems.append(
+            f"APP_API_KEY: must not be the development default '{DEV_API_KEY}' — "
+            "that key is public knowledge and would let anyone submit builds"
+        )
+    if not os.getenv("REDIS_URL"):
+        problems.append(
+            "REDIS_URL: must be set — the 'redis://localhost:6379' default only "
+            "works for local development"
+        )
+    if not (os.getenv("DEEPSEEK_API_KEY") or os.getenv("KIMI_API_KEY")):
+        problems.append(
+            "DEEPSEEK_API_KEY and/or KIMI_API_KEY: at least one LLM provider key "
+            "is required (no agent can run without one)"
+        )
+    return problems
+
+def _fail_fast_on_production_misconfiguration():
+    """Refuse to boot in production with insecure or missing configuration.
+
+    Fails at import time so the container exits immediately with an
+    actionable message instead of serving /v1/health while every build
+    fails or — worse — accepting builds with a public default API key.
+    """
+    if not _is_production():
+        return
+    problems = _production_problems()
+    if problems:
+        raise RuntimeError(
+            "Refusing to start in production with insecure or missing configuration.\n"
+            "Fix these on the deployment:\n- " + "\n- ".join(problems)
+        )
 
 @dataclass(frozen=True)
 class Config:
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    # "development" (default) or "production". Production refuses to start with
+    # insecure/missing config (see _fail_fast_on_production_misconfiguration).
+    # Railway deploys are auto-detected via RAILWAY_ENVIRONMENT.
+    ENVIRONMENT: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development").strip().lower() or "development")
+    PRODUCTION_MODE: bool = field(default_factory=_is_production)
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     KIMI_API_KEY: str = os.getenv("KIMI_API_KEY", "")
     # Kimi/Moonshot API base. International keys work on api.moonshot.ai;
@@ -50,3 +116,4 @@ class Config:
     REVIEW_PROMPT_MAX_CHARS: int = int(os.getenv("REVIEW_PROMPT_MAX_CHARS", "12000"))
 
 CONFIG = Config()
+_fail_fast_on_production_misconfiguration()
