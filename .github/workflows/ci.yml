@@ -22,3 +22,34 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Run tests
         run: pytest -q
+
+  deploy-image:
+    # Builds the exact artifact Railway deploys (root Dockerfile) and proves the
+    # healthcheck path /v1/health answers 200 with status ok inside the running
+    # container — the same probe Railway's healthcheck will perform.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Railway image (root Dockerfile)
+        run: docker build -t kloudywhale:ci .
+      - name: Smoke-test /v1/health in the container
+        run: |
+          # PORT set like Railway does; REDIS_URL deliberately unreachable to
+          # prove /v1/health does not depend on Redis being up.
+          docker run -d --name kw -p 8080:8080 \
+            -e PORT=8080 -e REDIS_URL=redis://127.0.0.1:6399 \
+            kloudywhale:ci
+          for i in $(seq 1 30); do
+            body=$(curl -sS -m 2 http://127.0.0.1:8080/v1/health 2>/dev/null || true)
+            if printf '%s' "$body" | grep -q '"status":"ok"'; then
+              echo "HEALTH OK: $body"
+              docker rm -f kw
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "--- container logs ---"
+          docker logs kw || true
+          docker rm -f kw
+          echo "FAILED: /v1/health never returned status ok in the container" >&2
+          exit 1

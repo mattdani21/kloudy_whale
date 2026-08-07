@@ -1,0 +1,21 @@
+# Keep the Railway/Docker build context small: the image only needs
+# swarm-harness/requirements.txt + swarm-harness/app/ + swarm-harness/worker/.
+# Everything else here is tooling, docs, or local state — no effect on the image.
+.git
+.github
+.venv
+.venv-test
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.DS_Store
+**/.env
+**/.env.*
+examples
+scripts
+/*.md
+docker-compose.yml
+k8s-deployment.yaml
+swarm-harness/docker-compose.yml
+swarm-harness/k8s-deployment.yaml
+swarm-harness/tests

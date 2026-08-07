@@ -174,7 +174,7 @@ DeepKimi/
 
 ### Option 0 — Try the live instance
 
-A public deployment runs at **https://kloudywhale-production.up.railway.app** (web UI at `/`, API docs at `/docs`). You need an API key from that deployment's owner to submit builds — the UI asks for it.
+A public deployment runs at **https://kloudywhale-production.up.railway.app** (web UI at `/`, API docs at `/docs`). You need an API key from that deployment's owner to submit builds — the UI asks for it. `scripts/verify-deploy.sh` checks the live instance (`/v1/health`, `/v1/config`) and runs a real smoke build when given `APP_API_KEY`.
 
 ### Option A — Docker Compose (recommended)
 
